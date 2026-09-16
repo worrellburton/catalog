@@ -11,7 +11,10 @@
 // degrades every other product in the catalog, not just the new ones.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { parseShopMyUrl, mapPin, type PinContext, type MappedProduct } from '../_shared/shopmy.ts';
+import {
+  parseShopMyUrl, mapPin, mapCurator, pinAffiliateUrl,
+  type PinContext, type MappedProduct, type ShopMyUser, type MappedCurator,
+} from '../_shared/shopmy.ts';
 import { urlAllowed } from '../_shared/ssrf-guard.ts';
 
 const API = 'https://apiv3.shopmy.us';
@@ -111,6 +114,25 @@ Deno.serve(async (req) => {
     } catch { /* progress is not worth failing an ingest over */ }
   }
 
+  /** Close the job row out to a terminal state, then return the error
+   *  response. EVERY error exit past the body parse goes through here —
+   *  early return or outer catch, before or after the 'crawling' patch:
+   *  ShopMyIngest treats 'pending' and 'crawling' alike as non-terminal,
+   *  so a row left at either is polled forever and never reaches onDone(). */
+  async function bail(
+    jobId: string | null,
+    status: number,
+    error: string,
+    body: Record<string, unknown>,
+  ): Promise<Response> {
+    await patchJob(jobId, {
+      status: 'failed',
+      completed_at: new Date().toISOString(),
+      error,
+    });
+    return json({ ...body, success: false, error }, status);
+  }
+
   let isServiceRole = false;
   try {
     const parts = token.split('.');
@@ -127,6 +149,12 @@ Deno.serve(async (req) => {
     if (!isAdmin) return json({ success: false, error: 'admin only' }, 403);
   }
 
+  // Hoisted out of the try so the outer catch can still close the job row:
+  // every upstream ShopMy fetch happens BEFORE the 'crawling' patch, so a
+  // throw there used to leave the client-created row at 'pending' — which
+  // ShopMyIngest polls forever, never firing onDone().
+  let jobId: string | null = null;
+
   try {
     const body = await req.json().catch(() => ({}));
     const dryRun = body.dry_run !== false;   // safe by default: must opt IN to writing
@@ -139,7 +167,7 @@ Deno.serve(async (req) => {
     // unthrottled - the one thing the batching design exists to prevent.
     const rawDelay = Number(body.batch_delay_ms ?? DEFAULT_DELAY_MS);
     const delayMs = Math.max(Number.isFinite(rawDelay) ? rawDelay : DEFAULT_DELAY_MS, 0);
-    const jobId: string | null = typeof body.job_id === 'string' ? body.job_id : null;
+    jobId = typeof body.job_id === 'string' ? body.job_id : null;
 
     let username: string | null = body.username ?? null;
     let curatorId: number | null = body.curator_id ?? null;
@@ -147,14 +175,14 @@ Deno.serve(async (req) => {
     if (body.url) {
       const parsed = parseShopMyUrl(String(body.url));
       if (!parsed) {
-        return json({ success: false, error: 'not a ShopMy URL' }, 400);
+        return bail(jobId, 400, 'not a ShopMy URL', {});
       }
       username = parsed.username;
       curatorId = parsed.curatorId;
       if (sectionId == null) sectionId = parsed.sectionId;
     }
     if (!username && curatorId == null) {
-      return json({ success: false, error: 'provide url or username or curator_id' }, 400);
+      return bail(jobId, 400, 'provide url or username or curator_id', {});
     }
     // Identifies the shop for the "no collections" 404 below — the only
     // place this is needed, since that 404 fires before there are any
@@ -162,29 +190,47 @@ Deno.serve(async (req) => {
     const curatorLabel = username ?? String(curatorId);
 
     // ── 1. sections + collections ──────────────────────────────────────────
-    const listUrl = new URL(`${API}/api/Shop/Collections`);
-    // Curator_username and Curator_id are distinct upstream params — one is
-    // never a substitute for the other (verified against the live API: a
-    // numeric id passed as Curator_username returns success with an empty
-    // list). Send exactly whichever identifier this shop resolved to.
-    if (username) listUrl.searchParams.set('Curator_username', username);
-    else listUrl.searchParams.set('Curator_id', String(curatorId));
-    listUrl.searchParams.set('limit', '100');
-    if (sectionId != null) listUrl.searchParams.set('Section_id', String(sectionId));
+    // ShopMy returns only the FIRST section's collections when no Section_id
+    // is given (measured: 13 of 64 for the reference shop), so a multi-section
+    // import is genuinely one list call per section, not a filter.
+    const requestedSections: (number | null)[] = Array.isArray(body.section_ids) && body.section_ids.length
+      ? body.section_ids.map(Number).filter((n: number) => Number.isFinite(n))
+      : [sectionId];
 
-    const list = await getJson(listUrl.toString());
-    const sections: Array<{ id: number; title: string }> = list.sections ?? [];
-    let collections: Array<{ id: number; name: string; Section_id: number; User_username?: string | null }> =
-      list.collections ?? [];
-    // ShopMy paginates this list (`hasMoreCollections`); no paging parameter
-    // (offset/cursor/page) is documented or evident on the response, so we
-    // cannot request page 2. Surface the flag rather than silently ingesting
-    // only page 1 and reporting a collection count that looks complete.
-    const hasMore = list.hasMoreCollections === true;
+    async function listFor(sec: number | null) {
+      const listUrl = new URL(`${API}/api/Shop/Collections`);
+      // Curator_username and Curator_id are distinct upstream params — one is
+      // never a substitute for the other (verified against the live API: a
+      // numeric id passed as Curator_username returns success with an empty
+      // list). Send exactly whichever identifier this shop resolved to.
+      if (username) listUrl.searchParams.set('Curator_username', username);
+      else listUrl.searchParams.set('Curator_id', String(curatorId));
+      listUrl.searchParams.set('limit', '100');
+      if (sec != null) listUrl.searchParams.set('Section_id', String(sec));
+      return getJson(listUrl.toString());
+    }
+
+    const lists = await pooled(requestedSections, COLLECTION_CONCURRENCY, listFor);
+    const sections: Array<{ id: number; title: string }> = lists[0]?.sections ?? [];
+    const byId = new Map<number, { id: number; name: string; Section_id: number; User_username?: string | null }>();
+    let hasMore = false;
+    for (const l of lists) {
+      // ShopMy paginates this list (`hasMoreCollections`); no paging parameter
+      // (offset/cursor/page) is documented or evident on the response, so we
+      // cannot request page 2. Surface the flag rather than silently ingesting
+      // only page 1 and reporting a collection count that looks complete.
+      if (l?.hasMoreCollections === true) hasMore = true;
+      // Dedup by collection id — a section list can legitimately repeat one.
+      for (const c of (l?.collections ?? [])) byId.set(c.id, c);
+    }
+    let collections = Array.from(byId.values());
     if (body.max_collections) collections = collections.slice(0, Number(body.max_collections));
 
     if (collections.length === 0) {
-      return json({ success: false, error: `no collections for ${curatorLabel}` }, 404);
+      // Same reason as the outer catch: a shop that resolves to nothing is
+      // the ordinary "curator does not exist" failure, and it lands here
+      // rather than in the catch — it must still close the job row.
+      return bail(jobId, 404, `no collections for ${curatorLabel}`, {});
     }
     const sectionName = (id: number) => sections.find((s) => s.id === id)?.title ?? null;
 
@@ -199,18 +245,24 @@ Deno.serve(async (req) => {
 
     // ── 2. pins, one request per collection ────────────────────────────────
     const skipped: Record<string, number> = {};
-    const mapped: MappedProduct[] = [];
     let pinCount = 0;
     const failures: string[] = [];
+    // Held in a ref object, not a bare `let`: TS's control-flow analysis
+    // cannot see an assignment made inside the pooled callback, so a `let`
+    // stays narrowed to `null` at the read below and types the truthy branch
+    // as `never` (TS2698 on the spread). A property read is not narrowed that
+    // way. Re-narrowing a widened local does NOT fix it — the widened const
+    // inherits the narrow type from its initializer.
+    const curatorUser: { current: ShopMyUser | null } = { current: null };
 
-    await pooled(collections, COLLECTION_CONCURRENCY, async (c) => {
+    const perCollection = await pooled(collections, COLLECTION_CONCURRENCY, async (c): Promise<MappedProduct[]> => {
       let detail: any;
       try {
         detail = await getJson(`${API}/api/Collections/${c.id}`);
       } catch (e) {
         // One bad collection must not abort a 64-collection run.
         failures.push(`collection ${c.id}: ${String(e).slice(0, 120)}`);
-        return;
+        return [];
       }
       const ctx: PinContext = {
         curator: username!,
@@ -218,13 +270,24 @@ Deno.serve(async (req) => {
         collectionName: c.name,
         sectionName: sectionName(c.Section_id),
       };
+      // Whichever collection lands first wins; every one carries the same user.
+      if (!curatorUser.current && detail.user) curatorUser.current = detail.user as ShopMyUser;
+      const rows: MappedProduct[] = [];
       for (const pin of detail.pins ?? []) {
         pinCount++;
         const m = mapPin(pin, ctx);
         if ('skip' in m) { skipped[m.skip] = (skipped[m.skip] ?? 0) + 1; continue; }
-        mapped.push(m);
+        rows.push(m);
       }
+      return rows;
     });
+
+    // pooled writes out[idx] by PICKUP index, so flattening restores
+    // collection order regardless of which collection's fetch finished
+    // first. Pushing into a shared array here instead would order rows by
+    // completion, making sort_order non-deterministic and reshuffling the
+    // creator's shop on every re-import.
+    const mapped: MappedProduct[] = perCollection.flat();
 
     // Cheap pre-filter so the run summary's `duplicate_in_run` count is
     // useful. This is a REPORTING pre-filter only, NOT the dedup guarantee:
@@ -239,16 +302,48 @@ Deno.serve(async (req) => {
       return true;
     });
 
+    const captured: ShopMyUser | null = curatorUser.current;
+
+    // A wizard operator may retype the handle at step 2; their choice wins
+    // over ShopMy's username, but still gets normalised by mapCurator.
+    const base: MappedCurator | null = captured
+      ? mapCurator(
+          typeof body.creator_handle === 'string' && body.creator_handle.trim()
+            ? { ...captured, username: body.creator_handle }
+            : captured,
+        )
+      : null;
+
+    // Step 2 of the wizard lets an operator retype the handle, the display
+    // name and the bio before committing. Their values win over ShopMy's,
+    // but only when non-blank — an omitted or whitespace-only override must
+    // leave the scraped value intact, not erase it. creators.display_name is
+    // NOT NULL, so the fallback chain must never yield an empty string.
+    const nameOverride = typeof body.creator_display_name === 'string' ? body.creator_display_name.trim() : '';
+    const bioOverride = typeof body.creator_bio === 'string' ? body.creator_bio.trim() : '';
+    const mappedCurator: MappedCurator | null = base
+      ? {
+          ...base,
+          display_name: nameOverride || base.display_name,
+          bio: bioOverride || base.bio,
+        }
+      : null;
+
     const summary = {
       success: true, curator: username, section_id: sectionId,
       sections: sections.length, collections: collections.length,
       pins: pinCount, mapped: unique.length, skipped,
       failures: failures.length ? failures : undefined,
       has_more: hasMore,
+      creator: mappedCurator,
     };
 
     if (dryRun) {
-      return json({ ...summary, dry_run: true, inserted: 0, merged: 0, rows: unique });
+      // `summary.sections` is a count (matches collections/pins/mapped), not
+      // the list — the wizard's step 1→2 transition needs the actual
+      // {id, title} pairs to build the step-3 section-picker table, so the
+      // dry-run response alone also carries the full list under its own key.
+      return json({ ...summary, dry_run: true, inserted: 0, merged: 0, rows: unique, section_list: sections });
     }
 
     // ── 3. throttled write ─────────────────────────────────────────────────
@@ -263,7 +358,43 @@ Deno.serve(async (req) => {
       total_urls: unique.length,
     });
 
-    let inserted = 0, merged = 0, writeError: string | null = null;
+    // ── 3a. creator ────────────────────────────────────────────────────────
+    // Fails CLOSED on a collision with a real creator. A creators row whose
+    // source is not 'shopmy' belongs to a signed-up person; silently
+    // overwriting their display name, avatar and bio with a scraped
+    // storefront's would be a data-loss bug, not an import.
+    let creatorWritten = false;
+    if (body.include_creator === true) {
+      if (!mappedCurator) {
+        return bail(jobId, 502, 'ShopMy returned no user block for this shop', summary);
+      }
+      const { data: existing, error: lookupErr } = await admin
+        .from('creators').select('handle, source').eq('handle', mappedCurator.handle).maybeSingle();
+      if (lookupErr) {
+        return bail(jobId, 500, `creator lookup failed: ${lookupErr.message}`, summary);
+      }
+      if (existing && existing.source !== 'shopmy') {
+        return bail(
+          jobId, 409,
+          `handle "${mappedCurator.handle}" already belongs to a non-ShopMy creator — choose a different handle`,
+          summary,
+        );
+      }
+      const { error: creatorErr } = await admin.from('creators').upsert({
+        handle: mappedCurator.handle,
+        display_name: mappedCurator.display_name,
+        avatar_url: mappedCurator.avatar_url,
+        bio: mappedCurator.bio,
+        source: 'shopmy',
+        source_url: typeof body.url === 'string' ? body.url : null,
+      }, { onConflict: 'handle' });
+      if (creatorErr) {
+        return bail(jobId, 500, `creator write failed: ${creatorErr.message}`, summary);
+      }
+      creatorWritten = true;
+    }
+
+    let inserted = 0, merged = 0, linked = 0, linkMissing = 0, writeError: string | null = null;
     try {
       for (let i = 0; i < unique.length; i += batchSize) {
         const batch = unique.slice(i, i + batchSize);
@@ -274,6 +405,41 @@ Deno.serve(async (req) => {
         }
         inserted += data?.inserted ?? 0;
         merged += data?.merged ?? 0;
+
+        // Link AFTER the upsert, per batch: the products must exist for the
+        // RPC's join on normalize_product_url to resolve them. Note this
+        // links every row in the batch, not just the ones the upsert touched
+        // — an unchanged product still belongs to this creator.
+        if (creatorWritten && mappedCurator) {
+          const linkRows = batch.map((m, j) => {
+            const sm = (m.raw_data?.shopmy ?? {}) as Record<string, unknown>;
+            const pinId = Number(sm.pin_id);
+            // Number(null) / Number('') / Number(false) / Number([]) are all 0,
+            // which passes isFinite and fabricates a dead go.shopmy.us/p-0 link
+            // that still satisfies a `like 'https://go.shopmy.us/p-%'` check.
+            const hasPin = Number.isInteger(pinId) && pinId > 0;
+            return {
+              url: m.url,
+              pin_id: hasPin ? pinId : null,
+              affiliate_url: hasPin ? pinAffiliateUrl(pinId) : null,
+              collection_name: (sm.collection_name as string) ?? null,
+              section_name: (sm.section_name as string) ?? null,
+              sort_order: i + j,
+            };
+          });
+          const { data: linkData, error: linkErr } = await admin
+            .rpc('shopmy_link_creator_products', { p_handle: mappedCurator.handle, rows: linkRows });
+          if (linkErr) {
+            writeError = `link batch ${Math.floor(i / batchSize)}: ${linkErr.message}`;
+            break;
+          }
+          linked += linkData?.linked ?? 0;
+          // URLs with no matching products row — a batch that upserted but
+          // did not resolve on normalize_product_url would otherwise report
+          // success with no signal at all.
+          linkMissing += linkData?.missing ?? 0;
+        }
+
         await patchJob(jobId, { scraped_urls: inserted + merged });
         if (i + batchSize < unique.length && delayMs > 0) await sleep(delayMs);
       }
@@ -293,11 +459,15 @@ Deno.serve(async (req) => {
 
     return json(
       { ...summary, success: !writeError, dry_run: false, inserted, merged,
+        creator_written: creatorWritten, linked, link_missing: linkMissing,
         batch_size: batchSize, batch_delay_ms: delayMs,
         error: writeError ?? undefined },
       writeError ? 500 : 200,
     );
   } catch (e) {
-    return json({ success: false, error: String(e).slice(0, 500) }, 500);
+    // Through bail(), not a bare json(): EVERY exit has to close the job row
+    // to a terminal state. patchJob no-ops on a null jobId, so a request that
+    // never sent one gets the same 500 body it always did.
+    return bail(jobId, 500, String(e).slice(0, 500), {});
   }
 });

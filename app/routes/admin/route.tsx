@@ -168,11 +168,6 @@ const allSearchItems: SearchItem[] = [
   { label: 'alfvaz', type: 'Shopper', to: '/admin/shoppers/alfvaz' },
   { label: 'franky90', type: 'Shopper', to: '/admin/shoppers/franky90' },
   { label: 'D1.barbershop', type: 'Shopper', to: '/admin/shoppers/D1.barbershop' },
-  // Creators
-  { label: 'applee', type: 'Creator', to: '/admin/creators/applee' },
-  { label: 'PrettyHome', type: 'Creator', to: '/admin/creators/PrettyHome' },
-  { label: 'testapple', type: 'Creator', to: '/admin/creators/testapple' },
-  { label: 'apple', type: 'Creator', to: '/admin/creators/apple' },
 ];
 
 interface GenNotification {

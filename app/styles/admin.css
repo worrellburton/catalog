@@ -3565,7 +3565,8 @@ html.admin-on-dark-canvas .admin-topbar,
   color: #555;
   margin-bottom: 5px;
 }
-.admin-form-group input {
+.admin-form-group input,
+.admin-form-group textarea {
   width: 100%;
   padding: 8px 10px;
   border: 1px solid #ddd;
@@ -3575,7 +3576,8 @@ html.admin-on-dark-canvas .admin-topbar,
   transition: border-color 0.15s;
   box-sizing: border-box;
 }
-.admin-form-group input:focus { border-color: #111; }
+.admin-form-group input:focus,
+.admin-form-group textarea:focus { border-color: #111; }
 .admin-form-hint {
   display: block;
   font-size: 11px;
@@ -3599,8 +3601,10 @@ html.admin-on-dark-canvas .admin-topbar,
 .admin-dark .admin-btn-secondary { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8); }
 .admin-dark .admin-btn-secondary:hover:not(:disabled) { background: rgba(255,255,255,0.12); }
 .admin-dark .admin-form-group label { color: rgba(255,255,255,0.5); }
-.admin-dark .admin-form-group input { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); color: rgba(255,255,255,0.9); }
-.admin-dark .admin-form-group input:focus { border-color: rgba(255,255,255,0.3); }
+.admin-dark .admin-form-group input,
+.admin-dark .admin-form-group textarea { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); color: rgba(255,255,255,0.9); }
+.admin-dark .admin-form-group input:focus,
+.admin-dark .admin-form-group textarea:focus { border-color: rgba(255,255,255,0.3); }
 .admin-dark .admin-form-hint { color: rgba(255,255,255,0.3); }
 
 

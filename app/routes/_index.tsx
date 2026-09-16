@@ -1297,7 +1297,7 @@ export default function Home() {
     // redirect (creator attribution rides along via the recorded cid).
     // Analytics below keep the ORIGINAL url so per-merchant reporting
     // is unchanged.
-    const outboundUrl = affiliateRedirect(url, product as { brand?: string | null; name?: string | null; id?: string | null });
+    const outboundUrl = affiliateRedirect(url, product);
     if (!inNativeShell) {
       window.open(outboundUrl, '_blank', 'noopener,noreferrer');
     } else {

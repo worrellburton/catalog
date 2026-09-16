@@ -1,5 +1,5 @@
 // Run: deno test --no-check --allow-read supabase/functions/_shared/shopmy.test.ts
-import { parseShopMyUrl, mapPin } from './shopmy.ts';
+import { parseShopMyUrl, mapPin, mapCurator, pinAffiliateUrl } from './shopmy.ts';
 
 function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error(`FAILED: ${msg}`);
@@ -236,4 +236,69 @@ Deno.test('keeps curation context in raw_data', () => {
   // would make every re-sync look like a change and re-fire the products
   // trigger fan-out for no reason. We never use it as our outbound link anyway.
   assert(!('affiliate_link' in m.raw_data.shopmy), 'affiliate_link must not be stored');
+});
+
+Deno.test('mapCurator maps ShopMy user block to creator fields', () => {
+  const r = mapCurator({
+    id: 446,
+    name: 'Bobbi Brown',
+    username: 'justbobbidotcom',
+    image: 'https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/img-user-deres-446-1726690629276',
+    description: 'Makeup Artist, Entrepreneur, Hotelier',
+  });
+  assert(r?.handle === 'justbobbidotcom', 'handle');
+  assert(r?.display_name === 'Bobbi Brown', 'display_name');
+  assert(r?.bio === 'Makeup Artist, Entrepreneur, Hotelier', 'bio');
+  assert(
+    r?.avatar_url === 'https://static.shopmy.us/uploads/img-user-deres-446-1726690629276',
+    'avatar must be rewritten to the CDN — the raw S3 object returns 403 to anyone',
+  );
+});
+
+Deno.test('mapCurator normalises handle case, a leading @, and spaces', () => {
+  // creators.handle is a case-SENSITIVE unique btree while CreatorAvatarFollow
+  // resolves with ilike, so two case variants can both insert and then resolve
+  // ambiguously. All three of these must collapse to one handle.
+  assert(mapCurator({ username: '@JustBobbi', name: 'B' })?.handle === 'justbobbi', 'strips @ and lowercases');
+  assert(mapCurator({ username: 'JustBobbi', name: 'B' })?.handle === 'justbobbi', 'lowercases');
+  assert(mapCurator({ username: 'Just Bobbi', name: 'B' })?.handle === 'just-bobbi', 'kebabs spaces');
+});
+
+Deno.test('mapCurator falls back to the handle when ShopMy has no name', () => {
+  // creators.display_name is NOT NULL, so an empty name cannot pass through.
+  const r = mapCurator({ username: 'justbobbidotcom', name: null });
+  assert(r?.display_name === 'justbobbidotcom', 'display_name falls back to the handle');
+});
+
+Deno.test('mapCurator rejects a user block with no usable username', () => {
+  assert(mapCurator({ name: 'Bobbi Brown' }) === null, 'no username');
+  assert(mapCurator({ username: '   ', name: 'B' }) === null, 'blank username');
+  assert(mapCurator({ username: '@@@', name: 'B' }) === null, 'nothing survives normalisation');
+});
+
+Deno.test('mapCurator rejects a username with no alphanumeric character', () => {
+  // creators.handle is NOT NULL, so an all-punctuation username must reject,
+  // not fall through as a garbage handle like "..." or "___".
+  assert(mapCurator({ username: '...', name: 'B' }) === null, 'all dots');
+  assert(mapCurator({ username: '___', name: 'B' }) === null, 'all underscores');
+  assert(mapCurator({ username: '._.', name: 'B' }) === null, 'dots and underscores only');
+  assert(mapCurator({ username: '日本語', name: 'B' }) === null, 'unicode-only, no ascii alphanumeric');
+});
+
+Deno.test('mapCurator trims leading/trailing punctuation but keeps a legitimate interior dot/underscore handle', () => {
+  assert(mapCurator({ username: ' -bobbi- ', name: 'B' })?.handle === 'bobbi', 'leading/trailing dash trimmed');
+  assert(
+    mapCurator({ username: 'bobbi.brown_1', name: 'B' })?.handle === 'bobbi.brown_1',
+    'a real handle with dots and underscores must survive untouched',
+  );
+});
+
+Deno.test('pinAffiliateUrl is a pure function of the pin id, with no clickId', () => {
+  const u = pinAffiliateUrl(51354524);
+  assert(u === 'https://go.shopmy.us/p-51354524', 'exact shape');
+  // The reason this replaces ShopMy's own affiliate_link field: that one
+  // embeds a fresh clickId UUID per fetch, so storing it made every re-sync
+  // look like a change and re-fired the products trigger fan-out.
+  assert(!u.includes('clickId') && !u.includes('?'), 'must carry no rotating component');
+  assert(pinAffiliateUrl(51354524) === u, 'stable across calls');
 });

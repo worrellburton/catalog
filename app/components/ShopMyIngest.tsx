@@ -28,8 +28,15 @@ interface LandedRow {
   image_url: string | null; image_verified: boolean | null; image_verify_note: string | null;
 }
 /** The write invocation's response — a separate call from the preview, so
- * it can report failures (and a lower mapped count) the preview never saw. */
-interface RunResult { failures?: string[]; }
+ * it can report failures (and a lower mapped count) the preview never saw.
+ * The creator row and the per-product creator links are the whole point of
+ * the wizard, so their counts are surfaced too, not just the product ones. */
+interface RunResult {
+  failures?: string[];
+  creator_written?: boolean;
+  linked?: number;
+  link_missing?: number;
+}
 
 /** Recover an edge function's JSON body from a non-2xx invoke() error. */
 async function edgeBody(err: unknown): Promise<Record<string, unknown> | null> {
@@ -47,8 +54,24 @@ function labelFor(raw: string): string {
   }
 }
 
-export default function ShopMyIngest({ url, onClose, onDone }:
-  { url: string; onClose: () => void; onDone: () => void }) {
+export default function ShopMyIngest({
+  url, sectionIds, creatorHandle, creatorDisplayName, creatorBio, includeCreator, onClose, onDone,
+}:
+  {
+    url: string;
+    /** Wizard step 3's selection. Undefined ingests whatever the URL addresses. */
+    sectionIds?: number[];
+    /** Wizard step 2's (possibly edited) handle. */
+    creatorHandle?: string;
+    /** Wizard step 2's (possibly edited) display name. Blank keeps ShopMy's. */
+    creatorDisplayName?: string;
+    /** Wizard step 2's (possibly edited) bio. Blank keeps ShopMy's. */
+    creatorBio?: string;
+    /** False keeps the legacy products-only behaviour. */
+    includeCreator?: boolean;
+    onClose: () => void;
+    onDone: () => void;
+  }) {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
@@ -70,7 +93,10 @@ export default function ShopMyIngest({ url, onClose, onDone }:
     setBusy(true); setError(null);
     try {
       const { data, error: err } = await supabase!.functions.invoke('shopmy-ingest', {
-        body: { url, dry_run: true },
+        body: {
+          url, dry_run: true, section_ids: sectionIds, creator_handle: creatorHandle,
+          creator_display_name: creatorDisplayName, creator_bio: creatorBio,
+        },
       });
       const p = data ?? (err ? await edgeBody(err) : null);
       if (!p?.success) throw new Error(p?.error ?? (err as Error)?.message ?? 'preview failed');
@@ -80,7 +106,7 @@ export default function ShopMyIngest({ url, onClose, onDone }:
     } finally {
       setBusy(false);
     }
-  }, [url]);
+  }, [url, sectionIds, creatorHandle, creatorDisplayName, creatorBio]);
 
   useEffect(() => { void runPreview(); }, [runPreview]);
 
@@ -149,7 +175,12 @@ export default function ShopMyIngest({ url, onClose, onDone }:
       timer.current = setInterval(() => void poll(createdJob.id, preview.curator), POLL_MS);
 
       const { data, error: err } = await supabase!.functions.invoke('shopmy-ingest', {
-        body: { url, dry_run: false, job_id: createdJob.id },
+        body: {
+          url, dry_run: false, job_id: createdJob.id,
+          section_ids: sectionIds, creator_handle: creatorHandle,
+          creator_display_name: creatorDisplayName, creator_bio: creatorBio,
+          include_creator: includeCreator === true,
+        },
       });
       // functions.invoke() nulls `data` and throws on any non-2xx — this
       // ingest returns its partial-failure summary at HTTP 500, so recovering
@@ -181,7 +212,7 @@ export default function ShopMyIngest({ url, onClose, onDone }:
       // createProfileCrawlJob itself failed.
       if (created) poll(created.id, preview.curator).catch(() => {});
     }
-  }, [preview, url, poll]);
+  }, [preview, url, poll, sectionIds, creatorHandle, creatorDisplayName, creatorBio, includeCreator]);
 
   const phase: IngestPhase | null = job ? phaseFor(job, INGEST_ESTIMATED_SECONDS) : null;
   const pct = job ? percentFor(job) : 0;
@@ -255,6 +286,18 @@ export default function ShopMyIngest({ url, onClose, onDone }:
               The bar reads 100% because the run finished — only {job.scraped_urls} of {total} needed
               a write; the rest were already present and unchanged.
             </p>
+          )}
+          {run?.creator_written && (
+            <p className="admin-form-hint">
+              Creator profile written · {run.linked ?? 0} product
+              {run.linked === 1 ? '' : 's'} linked to them.
+            </p>
+          )}
+          {!!run?.link_missing && (
+            <div className="admin-form-error">
+              {run.link_missing} product{run.link_missing === 1 ? '' : 's'} could not be attributed
+              to this creator — they are in the catalog but carry none of their links.
+            </div>
           )}
           {run?.failures && run.failures.length > 0 && (
             <div className="admin-form-error">
