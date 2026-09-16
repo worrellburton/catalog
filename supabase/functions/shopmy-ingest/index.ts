@@ -114,6 +114,25 @@ Deno.serve(async (req) => {
     } catch { /* progress is not worth failing an ingest over */ }
   }
 
+  /** Close the job row out to a terminal state, then return the error
+   *  response. Every early return AFTER the 'crawling' patch must go
+   *  through here: the outer catch only catches throws, and a row left at
+   *  'crawling' is polled forever by ShopMyIngest and never reaches
+   *  onDone(). */
+  async function bail(
+    jobId: string | null,
+    status: number,
+    error: string,
+    body: Record<string, unknown>,
+  ): Promise<Response> {
+    await patchJob(jobId, {
+      status: 'failed',
+      completed_at: new Date().toISOString(),
+      error,
+    });
+    return json({ ...body, success: false, error }, status);
+  }
+
   let isServiceRole = false;
   try {
     const parts = token.split('.');
@@ -217,19 +236,24 @@ Deno.serve(async (req) => {
 
     // ── 2. pins, one request per collection ────────────────────────────────
     const skipped: Record<string, number> = {};
-    const mapped: MappedProduct[] = [];
     let pinCount = 0;
     const failures: string[] = [];
-    let curatorUser: ShopMyUser | null = null;
+    // Held in a ref object, not a bare `let`: TS's control-flow analysis
+    // cannot see an assignment made inside the pooled callback, so a `let`
+    // stays narrowed to `null` at the read below and types the truthy branch
+    // as `never` (TS2698 on the spread). A property read is not narrowed that
+    // way. Re-narrowing a widened local does NOT fix it — the widened const
+    // inherits the narrow type from its initializer.
+    const curatorUser: { current: ShopMyUser | null } = { current: null };
 
-    await pooled(collections, COLLECTION_CONCURRENCY, async (c) => {
+    const perCollection = await pooled(collections, COLLECTION_CONCURRENCY, async (c): Promise<MappedProduct[]> => {
       let detail: any;
       try {
         detail = await getJson(`${API}/api/Collections/${c.id}`);
       } catch (e) {
         // One bad collection must not abort a 64-collection run.
         failures.push(`collection ${c.id}: ${String(e).slice(0, 120)}`);
-        return;
+        return [];
       }
       const ctx: PinContext = {
         curator: username!,
@@ -238,14 +262,23 @@ Deno.serve(async (req) => {
         sectionName: sectionName(c.Section_id),
       };
       // Whichever collection lands first wins; every one carries the same user.
-      if (!curatorUser && detail.user) curatorUser = detail.user as ShopMyUser;
+      if (!curatorUser.current && detail.user) curatorUser.current = detail.user as ShopMyUser;
+      const rows: MappedProduct[] = [];
       for (const pin of detail.pins ?? []) {
         pinCount++;
         const m = mapPin(pin, ctx);
         if ('skip' in m) { skipped[m.skip] = (skipped[m.skip] ?? 0) + 1; continue; }
-        mapped.push(m);
+        rows.push(m);
       }
+      return rows;
     });
+
+    // pooled writes out[idx] by PICKUP index, so flattening restores
+    // collection order regardless of which collection's fetch finished
+    // first. Pushing into a shared array here instead would order rows by
+    // completion, making sort_order non-deterministic and reshuffling the
+    // creator's shop on every re-import.
+    const mapped: MappedProduct[] = perCollection.flat();
 
     // Cheap pre-filter so the run summary's `duplicate_in_run` count is
     // useful. This is a REPORTING pre-filter only, NOT the dedup guarantee:
@@ -260,13 +293,15 @@ Deno.serve(async (req) => {
       return true;
     });
 
+    const captured: ShopMyUser | null = curatorUser.current;
+
     // A wizard operator may retype the handle at step 2; their choice wins
     // over ShopMy's username, but still gets normalised by mapCurator.
-    const mappedCurator: MappedCurator | null = curatorUser
+    const mappedCurator: MappedCurator | null = captured
       ? mapCurator(
           typeof body.creator_handle === 'string' && body.creator_handle.trim()
-            ? { ...curatorUser, username: body.creator_handle }
-            : curatorUser,
+            ? { ...captured, username: body.creator_handle }
+            : captured,
         )
       : null;
 
@@ -303,18 +338,19 @@ Deno.serve(async (req) => {
     let creatorWritten = false;
     if (body.include_creator === true) {
       if (!mappedCurator) {
-        return json({ ...summary, success: false, error: 'ShopMy returned no user block for this shop' }, 502);
+        return bail(jobId, 502, 'ShopMy returned no user block for this shop', summary);
       }
       const { data: existing, error: lookupErr } = await admin
         .from('creators').select('handle, source').eq('handle', mappedCurator.handle).maybeSingle();
       if (lookupErr) {
-        return json({ ...summary, success: false, error: `creator lookup failed: ${lookupErr.message}` }, 500);
+        return bail(jobId, 500, `creator lookup failed: ${lookupErr.message}`, summary);
       }
       if (existing && existing.source !== 'shopmy') {
-        return json({
-          ...summary, success: false,
-          error: `handle "${mappedCurator.handle}" already belongs to a non-ShopMy creator — choose a different handle`,
-        }, 409);
+        return bail(
+          jobId, 409,
+          `handle "${mappedCurator.handle}" already belongs to a non-ShopMy creator — choose a different handle`,
+          summary,
+        );
       }
       const { error: creatorErr } = await admin.from('creators').upsert({
         handle: mappedCurator.handle,
@@ -325,12 +361,12 @@ Deno.serve(async (req) => {
         source_url: typeof body.url === 'string' ? body.url : null,
       }, { onConflict: 'handle' });
       if (creatorErr) {
-        return json({ ...summary, success: false, error: `creator write failed: ${creatorErr.message}` }, 500);
+        return bail(jobId, 500, `creator write failed: ${creatorErr.message}`, summary);
       }
       creatorWritten = true;
     }
 
-    let inserted = 0, merged = 0, linked = 0, writeError: string | null = null;
+    let inserted = 0, merged = 0, linked = 0, linkMissing = 0, writeError: string | null = null;
     try {
       for (let i = 0; i < unique.length; i += batchSize) {
         const batch = unique.slice(i, i + batchSize);
@@ -350,10 +386,14 @@ Deno.serve(async (req) => {
           const linkRows = batch.map((m, j) => {
             const sm = (m.raw_data?.shopmy ?? {}) as Record<string, unknown>;
             const pinId = Number(sm.pin_id);
+            // Number(null) / Number('') / Number(false) / Number([]) are all 0,
+            // which passes isFinite and fabricates a dead go.shopmy.us/p-0 link
+            // that still satisfies a `like 'https://go.shopmy.us/p-%'` check.
+            const hasPin = Number.isInteger(pinId) && pinId > 0;
             return {
               url: m.url,
-              pin_id: Number.isFinite(pinId) ? pinId : null,
-              affiliate_url: Number.isFinite(pinId) ? pinAffiliateUrl(pinId) : null,
+              pin_id: hasPin ? pinId : null,
+              affiliate_url: hasPin ? pinAffiliateUrl(pinId) : null,
               collection_name: (sm.collection_name as string) ?? null,
               section_name: (sm.section_name as string) ?? null,
               sort_order: i + j,
@@ -366,6 +406,10 @@ Deno.serve(async (req) => {
             break;
           }
           linked += linkData?.linked ?? 0;
+          // URLs with no matching products row — a batch that upserted but
+          // did not resolve on normalize_product_url would otherwise report
+          // success with no signal at all.
+          linkMissing += linkData?.missing ?? 0;
         }
 
         await patchJob(jobId, { scraped_urls: inserted + merged });
@@ -387,7 +431,7 @@ Deno.serve(async (req) => {
 
     return json(
       { ...summary, success: !writeError, dry_run: false, inserted, merged,
-        creator_written: creatorWritten, linked,
+        creator_written: creatorWritten, linked, link_missing: linkMissing,
         batch_size: batchSize, batch_delay_ms: delayMs,
         error: writeError ?? undefined },
       writeError ? 500 : 200,
