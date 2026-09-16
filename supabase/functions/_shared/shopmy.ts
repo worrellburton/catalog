@@ -222,3 +222,64 @@ export function mapPin(pin: ShopMyPin, ctx: PinContext): MappedProduct | { skip:
     },
   };
 }
+
+export interface ShopMyUser {
+  id?: number | null;
+  name?: string | null;
+  username?: string | null;
+  image?: string | null;
+  description?: string | null;
+}
+
+export interface MappedCurator {
+  handle: string;
+  display_name: string;
+  avatar_url: string | null;
+  bio: string | null;
+}
+
+/**
+ * `creators.handle` is a case-SENSITIVE unique btree, but
+ * CreatorAvatarFollow resolves handles with `ilike`
+ * (app/components/CreatorAvatarFollow.tsx:16-28). Without normalising here,
+ * "JustBobbi" and "justbobbi" both insert and then resolve ambiguously.
+ */
+function normaliseHandle(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/^@+/, '')
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/** ShopMy's `user` block (from GET /api/Collections/:id) → a creators row. */
+export function mapCurator(user: ShopMyUser): MappedCurator | null {
+  const handle = normaliseHandle(user.username ?? '');
+  if (!handle) return null;
+
+  const avatar = user.image ? cdnImageUrl(user.image) : null;
+  const bio = (user.description ?? '').trim();
+
+  return {
+    handle,
+    // creators.display_name is NOT NULL — never let a blank ShopMy name through.
+    display_name: (user.name ?? '').trim() || handle,
+    avatar_url: avatar,
+    bio: bio || null,
+  };
+}
+
+/**
+ * The creator's own stable ShopMy link for one pin. A permanent 302 into
+ * ShopMy's redirect_click carrying `cid=user-<curatorId>-pin-<pinId>`.
+ *
+ * This is why we can store a link at all. ShopMy's own `affiliate_link` field
+ * embeds a fresh `clickId` UUID on every fetch, so storing THAT made each
+ * re-sync look like a change and re-fired the products trigger fan-out (see
+ * the note in mapPin's raw_data block). This shape is a pure function of
+ * `pin_id`, which we already capture.
+ */
+export function pinAffiliateUrl(pinId: number): string {
+  return `https://go.shopmy.us/p-${pinId}`;
+}
