@@ -24,6 +24,10 @@ interface UserMenuProps {
   onOpenMyLooks?: () => void;
   onOpenWallet?: () => void;
   onOpenProfile?: () => void;
+  /** Opens a directory page (Creators / Brands / Products / Catalogs). On
+   *  desktop these live in the header nav; the mobile account page lists
+   *  them here since the phone header has no room. */
+  onOpenDirectory?: (kind: 'creators' | 'brands' | 'products' | 'catalogs') => void;
   bookmarkCount: number;
   user?: UserMenuUser | null;
   onLogout?: () => void;
@@ -170,6 +174,7 @@ function UserMenu({
   onOpenMyLooks,
   onOpenWallet,
   onOpenProfile,
+  onOpenDirectory,
   bookmarkCount,
   user,
   onLogout,
@@ -870,6 +875,16 @@ function UserMenu({
                   <PageRow icon="grid" label="My Catalog" onClick={runPageItem(onOpenMyLooks)} />
                 )}
 
+                {/* Browse — the header nav's four pages, for phones. */}
+                {onOpenDirectory && (
+                  <div className="user-menu-page-browse">
+                    <PageRow icon="creators" label="Creators" onClick={runPageItem(() => onOpenDirectory('creators'))} />
+                    <PageRow icon="brands" label="Brands" onClick={runPageItem(() => onOpenDirectory('brands'))} />
+                    <PageRow icon="products" label="Products" onClick={runPageItem(() => onOpenDirectory('products'))} />
+                    <PageRow icon="catalogs" label="Catalogs" onClick={runPageItem(() => onOpenDirectory('catalogs'))} />
+                  </div>
+                )}
+
                 {/* Style Up — AI-stylist chat. Style app only; the Catalog app
                     ships no entry point into it. */}
                 {showStyleUp && (
@@ -1049,7 +1064,8 @@ function UserMenu({
 // Reusable row for the mobile Account page. The icon is keyed by name so
 // the row component stays compact; the SVGs are inline so we don't drag in
 // an icon library.
-type PageRowIcon = 'bookmark' | 'grid' | 'star' | 'wallet' | 'shield' | 'import' | 'deck' | 'logout' | 'chat' | 'trash';
+type PageRowIcon = 'bookmark' | 'grid' | 'star' | 'wallet' | 'shield' | 'import' | 'deck' | 'logout' | 'chat' | 'trash'
+  | 'creators' | 'brands' | 'products' | 'catalogs';
 function PageRow({ icon, label, onClick, badge, trailing, variant }: {
   icon: PageRowIcon;
   label: string;
@@ -1071,6 +1087,10 @@ function PageRow({ icon, label, onClick, badge, trailing, variant }: {
         {icon === 'deck' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="4" x2="9" y2="20"/></svg>}
         {icon === 'logout' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>}
         {icon === 'trash' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>}
+        {icon === 'creators' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
+        {icon === 'brands' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>}
+        {icon === 'products' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>}
+        {icon === 'catalogs' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>}
       </span>
       <span className="user-menu-page-row-label">{label}</span>
       {badge != null && <span className="user-menu-page-row-badge">{badge}</span>}

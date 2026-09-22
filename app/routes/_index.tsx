@@ -37,7 +37,7 @@ import { useSearchUrlSync } from '~/hooks/useSearchUrlSync';
 import { useShopperGender } from '~/hooks/useShopperGender';
 import { toCatalogName, getRandomCatalogName } from '~/utils/catalogName';
 import { funnyCatalogName, isConversationalQuery } from '~/utils/searchIntent';
-import { prefetchSimilarProducts, prefetchCreativesByBrand, prefetchHomeFeed, pruneStaleHomeFeedCaches, type ProductAd } from '~/services/product-creative';
+import { prefetchSimilarProducts, prefetchCreativesByBrand, prefetchHomeFeed, pruneStaleHomeFeedCaches, getShopperGender, type ProductAd } from '~/services/product-creative';
 import { pruneStalePersistedOrders } from '~/services/personalized-feed';
 import { getGraphPairs, type GraphPair } from '~/services/graph-pairs';
 import { getLooks, getLookByUuid } from '~/services/looks';
@@ -58,6 +58,15 @@ import { retireServiceWorker } from '~/utils/registerSW';
 import HeaderWalletPill from '~/components/HeaderWalletPill';
 import HeaderActivityPill from '~/components/HeaderActivityPill';
 import FollowingRail from '~/components/FollowingRail';
+import HeaderNav from '~/components/HeaderNav';
+import {
+  parseDirectoryPath,
+  directoryPath,
+  typeSlug,
+  type DirectoryGender,
+  type DirectoryKind,
+  type DirectoryType,
+} from '~/services/directory';
 import CreatorConstellation from '~/components/CreatorConstellation';
 import { snapPeople } from '~/utils/peoplePanel';
 import PendingLookPill from '~/components/PendingLookPill';
@@ -103,9 +112,19 @@ const importCreatorWallet = () => import('~/components/CreatorWallet');
 const importProfilePage = () => import('~/components/ProfilePage');
 const importFollowingPage = () => import('~/components/FollowingPage');
 const importCommentsPage = () => import('~/components/CommentsPage');
+const importCreatorsDirectory = () => import('~/components/directory/CreatorsDirectory');
+const importBrandsDirectory = () => import('~/components/directory/BrandsDirectory');
+const importProductsDirectory = () => import('~/components/directory/ProductsDirectory');
+const importProductTypeDirectory = () => import('~/components/directory/ProductTypeDirectory');
+const importCatalogsDirectory = () => import('~/components/directory/CatalogsDirectory');
 
 const CreatorPage = lazyWithReload(importCreatorPage);
 const BrandPage = lazyWithReload(importBrandPage);
+const CreatorsDirectory = lazyWithReload(importCreatorsDirectory);
+const BrandsDirectory = lazyWithReload(importBrandsDirectory);
+const ProductsDirectory = lazyWithReload(importProductsDirectory);
+const ProductTypeDirectory = lazyWithReload(importProductTypeDirectory);
+const CatalogsDirectory = lazyWithReload(importCatalogsDirectory);
 const BookmarksPage = lazyWithReload(importBookmarksPage);
 const ProductPage = lazyWithReload(importProductPage);
 const LookOverlay = lazyWithReload(importLookOverlay);
@@ -340,6 +359,18 @@ export default function Home() {
   const [showWallet, setShowWallet] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showFollowing, setShowFollowing] = useState(false);
+  // Directory pages behind the header nav (/creators, /brands,
+  // /products[/type], /catalogs). The URL is the source of truth: seeded
+  // from the path on mount, pushed by openDirectory, re-read on popstate.
+  const [directory, setDirectory] = useState<{ kind: DirectoryKind; type: string | null } | null>(
+    () => (typeof window !== 'undefined' ? parseDirectoryPath(window.location.pathname) : null),
+  );
+  // The Women / Men lens shared by the Products mega menu and pages —
+  // starts from the shopper's own gender so the first open is theirs.
+  const [directoryGender, setDirectoryGender] = useState<DirectoryGender>(() => {
+    const g = getShopperGender();
+    return g === 'male' ? 'men' : g === 'female' ? 'women' : 'all';
+  });
   // Sign-in gate overlay. Shown when a guest hits a sign-in-only surface.
   // Cleared the moment a session resolves (the auto-route effect then
   // takes them in).
@@ -954,7 +985,46 @@ export default function Home() {
     } catch { /* ignore */ }
   }, [redirectingToStyle, navigate]);
 
+  // Directory pages. Opening one clears every detail / catalog surface the
+  // same way a creator catalog does, so the page is the only thing up; the
+  // header (and its nav) stays live above it.
+  const openDirectory = useCallback((kind: DirectoryKind, type: string | null = null) => {
+    setNav(() => []);
+    setSelectedProduct(null);
+    setSelectedCreative(null);
+    setSelectedLook(null);
+    setBrandFilter(null);
+    setCreatorFilter(null);
+    setShowBookmarks(false);
+    setShowMyLooks(false);
+    setShowFollowing(false);
+    setSearchQuery('');
+    setCatalogName('all');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('catalog:close-search'));
+      const target = directoryPath(kind, type);
+      if (window.location.pathname !== target) {
+        window.history.pushState({ overlay: 'directory' }, '', target);
+      }
+    }
+    setDirectory({ kind, type });
+  }, [setNav]);
+  const closeDirectory = useCallback(() => {
+    setDirectory(null);
+    if (typeof window !== 'undefined' && parseDirectoryPath(window.location.pathname)) {
+      window.history.pushState({}, '', '/');
+    }
+  }, []);
+  const openDirectoryType = useCallback((t: DirectoryType) => {
+    openDirectory('products', typeSlug(t.name));
+  }, [openDirectory]);
+
   const handleLogoClick = useCallback(() => {
+    // Logo = home: a directory page closes and the bar returns to '/'.
+    setDirectory(null);
+    if (typeof window !== 'undefined' && parseDirectoryPath(window.location.pathname)) {
+      window.history.pushState({}, '', '/');
+    }
     // Reset every layer that could be sitting on top of the feed:
     // search query + filters, all modal overlays (product, look,
     // brand, creator, bookmarks, my-looks). Then bump shuffleKey
@@ -2095,6 +2165,9 @@ export default function Home() {
 
     const onPop = () => {
       const path = window.location.pathname;
+      // Directory pages follow the bar: Back into /creators re-shows it,
+      // Back out of it drops it.
+      setDirectory(parseDirectoryPath(path));
       const onProduct = path.startsWith('/p/');
       const onLook    = path.startsWith('/l/');
       const onBrand   = path.startsWith('/b/');
@@ -2185,6 +2258,12 @@ export default function Home() {
       window.history.replaceState({}, '', '/');
     }
   }, [selectedProduct, selectedLook, creatorFilter, brandFilter]);
+
+  // A search typed while a directory page is up is answered on the feed, so
+  // the page steps aside (the Catalogs page opens catalogs this way too).
+  useEffect(() => {
+    if (directory && searchQuery.trim() !== '') closeDirectory();
+  }, [searchQuery, directory, closeDirectory]);
 
   const closeProfile = useCallback(() => {
     history.replaceState({}, '', '/#app');
@@ -2618,21 +2697,17 @@ export default function Home() {
                   <span className="logo-catalog-name">{catalogName}</span>
                 )}
               </button>
-            </div>
-            <div className="header-center">
-              <FollowingRail
-                mode="both"
-                onOpenCreator={handleOpenCreator}
-                onCreateFollowingCatalog={handleCreateFollowingCatalog}
-                onOpenFollowingList={openFollowingList}
-                selfEntry={
-                  (user?.role === 'creator' || user?.role === 'admin' || user?.role === 'super_admin') && user?.id
-                    ? { handle: `user:${user.id}`, displayName: user.displayName ?? null, avatarUrl: user.avatarUrl ?? null, ts: Number.MAX_SAFE_INTEGER }
-                    : null
-                }
-                onOpenSelf={openMyLooks}
+              <HeaderNav
+                active={directory?.kind ?? null}
+                onOpen={openDirectory}
+                gender={directoryGender}
+                onChangeGender={setDirectoryGender}
+                onOpenType={openDirectoryType}
               />
             </div>
+            {/* The following / followers rail moved from here onto the
+                Creators page (the nav took its place beside the wordmark). */}
+            <div className="header-center" />
             <PendingLookPill onOpen={(genId) => navigate(genId ? `/generate?gen=${genId}` : '/generate')} />
             <div className="header-right">
               {/* Earnings stays in its original slot. The activity pill
@@ -2669,6 +2744,7 @@ export default function Home() {
                 onChangeCatalogGender={handleGenderFilterChange}
                 onGuestSignup={() => setGuestGate({ variant: 'feed' })}
                 onSignIn={() => setShowSignIn(true)}
+                onOpenDirectory={openDirectory}
               />
             </div>
           </header>
@@ -2956,6 +3032,56 @@ export default function Home() {
               }
               onContinueGuest={guestGate.variant === 'feed' ? () => setGuestGate(null) : undefined}
             />
+          )}
+
+          {directory && (
+            <Suspense fallback={null}>
+              {directory.kind === 'creators' && (
+                <CreatorsDirectory
+                  onOpenCreator={handleOpenCreator}
+                  onClose={closeDirectory}
+                  rail={user ? (
+                    <FollowingRail
+                      mode="both"
+                      variant="page"
+                      onOpenCreator={handleOpenCreator}
+                      onCreateFollowingCatalog={(handles) => { closeDirectory(); handleCreateFollowingCatalog(handles); }}
+                      onOpenFollowingList={openFollowingList}
+                      selfEntry={
+                        (user.role === 'creator' || user.role === 'admin' || user.role === 'super_admin') && user.id
+                          ? { handle: `user:${user.id}`, displayName: user.displayName ?? null, avatarUrl: user.avatarUrl ?? null, ts: Number.MAX_SAFE_INTEGER }
+                          : null
+                      }
+                      onOpenSelf={openMyLooks}
+                    />
+                  ) : undefined}
+                />
+              )}
+              {directory.kind === 'brands' && (
+                <BrandsDirectory onOpenBrand={handleOpenBrandCatalog} onClose={closeDirectory} />
+              )}
+              {directory.kind === 'products' && !directory.type && (
+                <ProductsDirectory
+                  gender={directoryGender}
+                  onChangeGender={setDirectoryGender}
+                  onOpenType={openDirectoryType}
+                  onClose={closeDirectory}
+                />
+              )}
+              {directory.kind === 'products' && directory.type && (
+                <ProductTypeDirectory
+                  slug={directory.type}
+                  gender={directoryGender}
+                  onChangeGender={setDirectoryGender}
+                  onOpenProduct={(p) => { void handleOpenProduct(p); }}
+                  onBack={() => openDirectory('products')}
+                  onClose={closeDirectory}
+                />
+              )}
+              {directory.kind === 'catalogs' && (
+                <CatalogsDirectory onOpenCatalog={handleCreateCatalog} onClose={closeDirectory} />
+              )}
+            </Suspense>
           )}
 
           {creatorFilter && (

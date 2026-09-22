@@ -1295,3 +1295,6 @@ body.has-account-menu { overflow-x: hidden; }
   .user-menu-mega-inner { grid-template-columns: 1fr; gap: 40px; }
   .user-menu-mega-side { position: static; }
 }
+
+/* Browse rows (Creators / Brands / Products / Catalogs) on the mobile account page. */
+.user-menu-page-browse { margin: 6px 0 10px; }
