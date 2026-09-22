@@ -15,6 +15,9 @@ interface DirectoryPageProps {
   /** Quiet link above the title that goes back one level. */
   back?: { label: string; onClick: () => void };
   onClose: () => void;
+  /** A landing hero rendered in place of the eyebrow/title head. The meta
+   *  and aside then sit on a toolbar row under it. */
+  hero?: ReactNode;
   children: ReactNode;
 }
 
@@ -24,7 +27,7 @@ interface DirectoryPageProps {
  * fixed layer under the app header (the header and its nav stay live on
  * top) with its own scroller, so the feed underneath keeps its place.
  */
-export default function DirectoryPage({ eyebrow, title, meta, aside, back, onClose, children }: DirectoryPageProps) {
+export default function DirectoryPage({ eyebrow, title, meta, aside, back, onClose, hero, children }: DirectoryPageProps) {
   useEscapeKey(onClose);
 
   // Lock the document while the page is up (the page scrolls itself).
@@ -38,6 +41,18 @@ export default function DirectoryPage({ eyebrow, title, meta, aside, back, onClo
     <div className="dir-page">
       <div className="dir-page-scroll">
         <div className="dir-page-inner">
+          {hero ? (
+            <>
+              <h1 className="dir-sr-title">{title}</h1>
+              {hero}
+              {(meta || aside) && (
+                <div className="dir-toolbar">
+                  {meta && <div className="dir-meta">{meta}</div>}
+                  {aside && <div className="dir-head-aside">{aside}</div>}
+                </div>
+              )}
+            </>
+          ) : (
           <div className="dir-head">
             <div className="dir-head-main">
               {back && (
@@ -52,6 +67,7 @@ export default function DirectoryPage({ eyebrow, title, meta, aside, back, onClo
             </div>
             {aside && <div className="dir-head-aside">{aside}</div>}
           </div>
+          )}
           {children}
         </div>
       </div>
