@@ -713,6 +713,47 @@ html.ui-scroll-off .promo-product-info { pointer-events: none; }
   }
 }
 
+/* ── Home feed: details only on the hovered card ─────────────────────────
+   On pointer devices the home grid rests as pure imagery — the brand / name /
+   price bar, its gradient, the creator chip and the shoppability pill are
+   hidden on every card and appear ONLY on the card under the cursor (or the
+   keyboard-focused one). Scoped to .home-feed-wrap so the look / product page
+   rails, creator pages and Saved keep their always-on captions, and gated on
+   (hover: hover) so touch devices — which have no hover — keep them too.
+   Specificity (0,4,0) outweighs the .look-card.loaded load-fade (0,3,0); the
+   scroll-glide / ui-scroll-off / is-pointing rules above use !important and
+   still take precedence mid-scroll. */
+@media (hover: hover) {
+  .home-feed-wrap .feed-section-grid .look-card.loaded .card-gradient,
+  .home-feed-wrap .feed-section-grid .look-card.loaded .promo-product-info,
+  .home-feed-wrap .feed-section-grid .look-card.loaded .card-creator-tag,
+  .home-feed-wrap .feed-section-grid .look-card.loaded .card-products-pill {
+    opacity: 0;
+    transition: opacity 0.18s ease;
+  }
+  /* Hidden chrome must not eat clicks (same reason as the glide exception). */
+  .home-feed-wrap .feed-section-grid .look-card.loaded .card-creator-tag,
+  .home-feed-wrap .feed-section-grid .look-card.loaded .promo-product-info {
+    pointer-events: none;
+  }
+  .home-feed-wrap .feed-section-grid .look-card.loaded:hover .card-gradient,
+  .home-feed-wrap .feed-section-grid .look-card.loaded:hover .promo-product-info,
+  .home-feed-wrap .feed-section-grid .look-card.loaded:hover .card-creator-tag,
+  .home-feed-wrap .feed-section-grid .look-card.loaded:hover .card-products-pill,
+  .home-feed-wrap .feed-section-grid .look-card.loaded:focus-visible .card-gradient,
+  .home-feed-wrap .feed-section-grid .look-card.loaded:focus-visible .promo-product-info,
+  .home-feed-wrap .feed-section-grid .look-card.loaded:focus-visible .card-creator-tag,
+  .home-feed-wrap .feed-section-grid .look-card.loaded:focus-visible .card-products-pill {
+    opacity: 1;
+  }
+  .home-feed-wrap .feed-section-grid .look-card.loaded:hover .card-creator-tag,
+  .home-feed-wrap .feed-section-grid .look-card.loaded:hover .promo-product-info,
+  .home-feed-wrap .feed-section-grid .look-card.loaded:focus-visible .card-creator-tag,
+  .home-feed-wrap .feed-section-grid .look-card.loaded:focus-visible .promo-product-info {
+    pointer-events: auto;
+  }
+}
+
 /* ── Top chrome (header + the creator stories/orbit rail it holds) DISSOLVES
    on scroll, never snaps ──────────────────────────────────────────────────
    The header (header.css) only transitions `background`, and home-hero.css's
