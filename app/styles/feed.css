@@ -1053,7 +1053,14 @@
   opacity: 0;
   transition: opacity 0.6s ease;
 }
-.look-card.loaded .card-why-tag { opacity: 1; }
+/* Hover-only: the tag is context, not content — it appears while the
+   pointer is over the card (same reveal the save button uses) instead of
+   sitting on every card all the time. Touch devices have no hover, so the
+   tag stays hidden there. */
+@media (hover: hover) {
+  .look-card.loaded:hover .card-why-tag,
+  .look-card.loaded:focus-visible .card-why-tag { opacity: 1; transition-duration: 0.2s; }
+}
 .feed-section-grid[data-cols="3"] .card-why-tag { display: none !important; }
 
 /* ── Mobile feature tile ────────────────────────────────────────────────

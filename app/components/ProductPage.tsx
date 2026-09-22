@@ -13,10 +13,9 @@ import { trackAdClick, prefetchSimilarProducts, getSimilarProductsDiagnostics, d
 import SimilarDebugModal, { buildProductSimilarReport, buildGraphPairsReport, buildAffinityReport, type SimilarDebugReport } from '~/components/SimilarDebugModal';
 import { getProductDetails, type ProductDetails } from '~/services/product-details';
 import ProductMeasurementsDiagram from '~/components/ProductMeasurementsDiagram';
-import ProductSuggestionChips from '~/components/ProductSuggestionChips';
 import ProductCatalogPills from '~/components/ProductCatalogPills';
 import { getProductCatalogs, type ProductCatalog } from '~/services/catalogs';
-import { isFitRelevant, deriveFitLabel, buildSuggestionChipGroups } from '~/utils/productTaxonomy';
+import { isFitRelevant, deriveFitLabel } from '~/utils/productTaxonomy';
 import { type GraphPair } from '~/services/graph-pairs';
 import { useAuth } from '~/hooks/useAuth';
 import { ConfirmModal } from '~/components/ConfirmModal';
@@ -121,105 +120,6 @@ interface ProductPageProps {
   onHome?: () => void;
   /** Run a search on the feed (closes the overlay first). */
   onSearch?: (q: string) => void;
-}
-
-// Stable hash of any string → unsigned integer. Used to pick a deterministic
-// retailer set + price jitter per product so re-renders don't reshuffle the
-// Shop chips.
-function hashString(s: string): number {
-  let h = 5381;
-  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}
-
-interface RetailerOffer {
-  retailer: string;
-  url: string;
-  price: string;        // "$48.00"
-  priceCents: number;   // for "lowest" computation
-  badge?: 'lowest' | 'discount' | 'official';
-  discountPct?: number; // shown on the chip when badge==='discount'
-}
-
-// Synthetic retailer set with realistic, search-shaped fallback URLs so the
-// in-app browser actually lands somewhere useful per chip. The brand site
-// (product.url) is always retailer #1, marked "official". Stable per
-// product so prices don't reshuffle on re-render.
-const ALT_RETAILERS = [
-  { name: 'Amazon',    url: (q: string) => `https://www.amazon.com/s?k=${q}`,                bias: -0.07 },
-  { name: 'Nordstrom', url: (q: string) => `https://www.nordstrom.com/sr?keyword=${q}`,      bias: +0.03 },
-  { name: 'Revolve',   url: (q: string) => `https://www.revolve.com/r/Search.jsp?search=${q}`, bias: +0.05 },
-  { name: 'Shopbop',   url: (q: string) => `https://www.shopbop.com/s/${q}`,                  bias: -0.02 },
-  { name: 'Bloomingdale\'s', url: (q: string) => `https://www.bloomingdales.com/shop/search?keyword=${q}`, bias: +0.06 },
-] as const;
-
-function parsePriceCents(raw?: string | null): number | null {
-  if (!raw) return null;
-  const m = raw.replace(/,/g, '').match(/(\d+(?:\.\d{1,2})?)/);
-  if (!m) return null;
-  return Math.round(parseFloat(m[1]) * 100);
-}
-
-function formatCents(cents: number): string {
-  const dollars = cents / 100;
-  return `$${dollars.toFixed(dollars >= 100 ? 0 : 2)}`;
-}
-
-function buildRetailerOffers(product: Product): RetailerOffer[] {
-  const baseCents = parsePriceCents(product.price);
-  if (!baseCents) {
-    // No parseable price: still surface SOMETHING shoppable so the Shop
-    // button is never an empty button. If there's a brand URL, that's
-    // the official site; otherwise route to a web search for the
-    // product so the chip still works.
-    const fallbackUrl = product.url
-      || `https://www.google.com/search?q=${encodeURIComponent(`${product.brand || ''} ${product.name || ''}`.trim() + ' buy')}`;
-    return [{ retailer: product.brand || 'Brand site', url: fallbackUrl, price: ' - ', priceCents: 0, badge: 'official' }];
-  }
-  const seed = hashString(`${product.brand}|${product.name}`);
-  // Three deterministic alts pulled from the rotating pool.
-  const altCount = 3;
-  const offset = seed % ALT_RETAILERS.length;
-  const q = encodeURIComponent(`${product.brand || ''} ${product.name || ''}`.trim());
-
-  const offers: RetailerOffer[] = [];
-
-  if (product.url) {
-    offers.push({
-      retailer: product.brand || 'Brand site',
-      url: product.url,
-      price: formatCents(baseCents),
-      priceCents: baseCents,
-      badge: 'official',
-    });
-  }
-
-  for (let i = 0; i < altCount; i++) {
-    const r = ALT_RETAILERS[(offset + i) % ALT_RETAILERS.length];
-    // Per-retailer jitter so prices are believably varied - clamp to ±15%.
-    const jitterSeed = hashString(`${product.brand}|${product.name}|${r.name}`);
-    const jitter = ((jitterSeed % 200) / 1000) - 0.10; // -0.10 .. +0.10
-    const factor = 1 + r.bias + jitter;
-    const altCents = Math.max(100, Math.round(baseCents * factor));
-    offers.push({
-      retailer: r.name,
-      url: r.url(q),
-      price: formatCents(altCents),
-      priceCents: altCents,
-    });
-  }
-
-  // Mark the cheapest as "lowest"; if it also undercuts the brand price by
-  // >=10%, mark a "discount" badge with the percent off.
-  const cheapest = offers.reduce((acc, o) => (o.priceCents < acc.priceCents ? o : acc), offers[0]);
-  if (cheapest && cheapest.badge !== 'official') {
-    cheapest.badge = 'lowest';
-    if (baseCents - cheapest.priceCents >= baseCents * 0.10) {
-      cheapest.badge = 'discount';
-      cheapest.discountPct = Math.round(((baseCents - cheapest.priceCents) / baseCents) * 100);
-    }
-  }
-  return offers;
 }
 
 // Brand-logo experiment removed - Brandfetch's results were inconsistent
@@ -522,8 +422,6 @@ export default function ProductPage({
   // "Popular in" detail blocks behind a single toggle so the info column
   // leads with the essentials (brand, name, price, actions). Collapsed by
   // default; resets on every product navigation.
-  const [showMoreInfo, setShowMoreInfo] = useState(false);
-  useEffect(() => { setShowMoreInfo(false); }, [product.name, product.brand]);
 
   // Director scope key for this overlay — shared by the suspend effect below
   // and handleClose (which flags it exiting so the feed re-warms during the
@@ -827,13 +725,6 @@ export default function ProductPage({
   // the nested ContinuousFeed's gender scoping matches the home feed.
   const activeFilter = useActiveGenderFilter();
 
-  // Shop dropdown - collapsed by default on mobile so the action row
-  // reads clean; auto-expanded on desktop because the split layout
-  // gives the right column plenty of vertical space and the retailer
-  // comparison is the highest-value content there.
-  const isDesktop = typeof window !== 'undefined'
-    && window.matchMedia('(min-width: 960px)').matches;
-  const [showRetailers, setShowRetailers] = useState(isDesktop);
   // Side-rail back button: hidden at the top (the corner .pd-back is the
   // expected affordance there), fades in once the user has scrolled past
   // the hero so the corner button has scrolled off the page. Desktop only.
@@ -887,15 +778,6 @@ export default function ProductPage({
     return () => scroller.removeEventListener('scroll', onScroll);
   }, [scrollerEl]);
 
-  // Re-sync the drawer when the user navigates to a different product:
-  // open by default on desktop, closed on mobile.
-  useEffect(() => {
-    setShowRetailers(
-      typeof window !== 'undefined'
-        && window.matchMedia('(min-width: 960px)').matches,
-    );
-  }, [product.brand, product.name]);
-
   // Lazy-fetch the spec-sheet copy (size_fit, materials_care) once per
   // product open. The main feed/look loaders don't carry these fields
   // — keeps their payloads tight — and only ~1% of rows have them
@@ -948,14 +830,9 @@ export default function ProductPage({
   // or body-type chips. Occasion / season / "style it with" chips are
   // universal, so non-fashion still gets useful "Great for …" suggestions.
   const fitIntel = details?.fit_intelligence ?? product.fit_intelligence ?? null;
-  const styling = details?.styling_metadata ?? product.styling_metadata ?? null;
   const taxonomyCategory =
     (details?.product_taxonomy ?? product.product_taxonomy)?.category ?? null;
   const fitRelevant = isFitRelevant(taxonomyCategory, fitIntel);
-  const chipGroups = useMemo(
-    () => buildSuggestionChipGroups({ fitIntel, styling, fitRelevant }),
-    [fitIntel, styling, fitRelevant],
-  );
 
   useEffect(() => {
     // Mark mounted on first paint so --in-keyed rules apply. The page opens
@@ -1182,7 +1059,6 @@ export default function ProductPage({
   // Retailer chips - brand site + 3 synthetic alts (same pool every time so
   // prices are consistent across re-renders). Cheapest gets a lowest /
   // discount badge.
-  const retailerOffers = useMemo(() => buildRetailerOffers(product), [product]);
 
   // Poster source of last resort (canonical productPoster chain). Products
   // opened from a look can carry a primary-video poster in thumbnail_url while
@@ -1278,10 +1154,6 @@ export default function ProductPage({
     );
   })();
   const hasCatalogPills = !!onCreateCatalog && productCatalogs.length > 0;
-  const hasChips = chipGroups.length > 0;
-  // Whether the "View more info" toggle has anything to reveal. When all
-  // three detail blocks are empty the button is suppressed entirely.
-  const hasMoreInfo = !!specsNode || hasChips || hasCatalogPills;
 
   return (
     <div
@@ -1501,166 +1373,73 @@ export default function ProductPage({
             )}
           </section>
 
-          <section className="pd-info">
+          {/* Paper-catalog info column: brand, name, price, one real order
+              line ("Shop at <brand>" → the product's own URL), two text
+              links, then the spec sheet and the rails — all hairlines and
+              type, nothing that isn't backed by data. The former retailer
+              comparison was synthetic (a rotating list of stores with
+              jittered prices) and is gone. */}
+          <section className="pd-info pd-info--catalog">
           <div className="pd-info-inner">
             {product.brand && (
               onOpenBrand
                 ? (
                   <button
                     type="button"
-                    className="pd-brand brand-link"
+                    className="pd-brand pd-catalog-brand"
                     onClick={() => onOpenBrand(product.brand!)}
                   >
                     {product.brand}
                   </button>
                 )
-                : <div className="pd-brand">{product.brand}</div>
+                : <div className="pd-brand pd-catalog-brand">{product.brand}</div>
             )}
             <h1 className="pd-name">{product.name}</h1>
             {product.price && <div className="pd-price">{product.price}</div>}
             {shopperBody.heightCm && <SizeMatchBadge product={product} body={shopperBody} />}
 
-            <div className="pd-actions">
-              {retailerOffers.length > 0 && (
+            <div className="pd-catalog-actions">
+              {product.url && (
                 <button
                   type="button"
-                  className={`pd-shop-btn${showRetailers ? ' is-open' : ''}`}
-                  onClick={() => setShowRetailers(s => !s)}
-                  aria-expanded={showRetailers}
-                  aria-controls="pd-retailers-drawer"
+                  className="pd-catalog-shop"
+                  onClick={() => onOpenBrowser(product.url, product.name, product)}
                 >
-                  <span>Shop</span>
-                  <svg className="pd-shop-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="6 9 12 15 18 9" />
+                  <span className="pd-catalog-shop-label">Shop at {product.brand || 'the retailer'}</span>
+                  <svg className="pd-catalog-shop-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <line x1="7" y1="17" x2="17" y2="7" />
+                    <polyline points="7 7 17 7 17 17" />
                   </svg>
                 </button>
               )}
-              {/* Retailer comparison drawer — a full-width row INSIDE the
-                  action grid, so the offers expand directly under the Shop
-                  button (not below the whole 2×2 button group). Each chip:
-                  retailer + price; cheapest badged; brand site first. */}
-              {retailerOffers.length > 0 && (
-              <div
-                id="pd-retailers-drawer"
-                className={`pd-retailers-drawer${showRetailers ? ' is-open' : ''}`}
-                role="region"
-                aria-label="Where to buy"
-                aria-hidden={!showRetailers}
-              >
-                <div className="pd-retailers" role="list">
-                  {retailerOffers.map(offer => (
-                    <button
-                      key={offer.retailer}
-                      type="button"
-                      className={`pd-retailer-chip${offer.badge ? ` is-${offer.badge}` : ''}`}
-                      onClick={() => {
-                        setShowRetailers(false);
-                        // handleOpenBrowser in _index.tsx fires
-                        // trackProductClickout centrally now — no need
-                        // for a per-callsite trigger here.
-                        onOpenBrowser(offer.url, `${offer.retailer} - ${product.name}`, product);
-                      }}
-                      role="listitem"
-                    >
-                      <span className="pd-retailer-name">{offer.retailer}</span>
-                      <span className="pd-retailer-price">{offer.price}</span>
-                      {offer.badge === 'official' && <span className="pd-retailer-badge">Official</span>}
-                      {offer.badge === 'lowest' && <span className="pd-retailer-badge pd-retailer-badge--lowest">Lowest</span>}
-                      {offer.badge === 'discount' && (
-                        <span className="pd-retailer-badge pd-retailer-badge--discount">−{offer.discountPct}%</span>
-                      )}
-                      <svg className="pd-retailer-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="7" y1="17" x2="17" y2="7" />
-                        <polyline points="7 7 17 7 17 17" />
-                      </svg>
-                    </button>
-                  ))}
-                </div>
+              <div className="pd-catalog-links">
+                {/* "Add to a look" — kicks off the look-builder (/generate)
+                    with this product pre-picked. Works for any product type. */}
+                <button type="button" className="pd-catalog-link" onClick={handleTryOn}>
+                  Add to a look
+                </button>
+                {commentsEnabled && commentSlug && onOpenComments && (
+                  <button
+                    type="button"
+                    className="pd-catalog-link"
+                    onClick={() => onOpenComments('product', commentSlug)}
+                  >
+                    {commentCount != null && commentCount > 0 ? `Comments (${commentCount > 99 ? '99+' : commentCount})` : 'Comments'}
+                  </button>
+                )}
               </div>
-            )}
-              {/* "Add to a look" — kicks off the look-builder (/generate)
-                  with this product pre-picked. Works for any product type
-                  (a candle or a pot can be added to a look even though you
-                  can't "try it on"), so the language is add-to-a-look, not
-                  try-on. */}
-              <button
-                type="button"
-                className="pd-tryon-btn"
-                onClick={handleTryOn}
-                aria-label="Add this to a look"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                <span>Add to a look</span>
-              </button>
-              {/* Comments shares the action row with Shop + Add to a look. */}
-              {commentsEnabled && commentSlug && onOpenComments && (
-                <button
-                  type="button"
-                  className="pd-comments-btn"
-                  onClick={() => onOpenComments('product', commentSlug)}
-                  aria-label="Comments"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-                  </svg>
-                  <span>{commentCount != null && commentCount > 0 ? `Comments ${commentCount > 99 ? '99+' : commentCount}` : 'Comments'}</span>
-                </button>
-              )}
-              {/* View more info joins the action group as the 4th button so
-                  Shop / Add to a look / Comments / View more info read as one
-                  2x2 set instead of three separate rows. The panel it toggles
-                  renders directly below the group. */}
-              {hasMoreInfo && (
-                <button
-                  type="button"
-                  className={`pd-more-info-btn${showMoreInfo ? ' is-open' : ''}`}
-                  onClick={() => setShowMoreInfo(v => !v)}
-                  aria-expanded={showMoreInfo}
-                  aria-controls="pd-more-info-panel"
-                >
-                  <span>{showMoreInfo ? 'Hide info' : 'View more info'}</span>
-                  <svg className="pd-more-info-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
-                </button>
-              )}
             </div>
 
-            {/* "View more info" panel — collapses Size & fit, the
-                "Best for" chips (occasion / season / "Suits …" / style),
-                and "Popular in" behind the toggle that now lives in the
-                action group above. Renders only when at least one block
-                has content. */}
-            {hasMoreInfo && (
-              <div className="pd-more-info">
-                <div
-                  id="pd-more-info-panel"
-                  className={`pd-more-info-panel${showMoreInfo ? ' is-open' : ''}`}
-                  hidden={!showMoreInfo}
-                >
-                  {/* Size & fit + Materials & care spec sheet. */}
-                  {specsNode}
+            {/* Size & fit + Materials & care — inline, only when the scraper
+                captured something (specsNode is null otherwise). */}
+            {specsNode}
 
-                  {/* "Best for" suggestion chips — occasion, body-type
-                      ("Suits …"), season, works-with. Renders nothing when
-                      there's no metadata. */}
-                  <ProductSuggestionChips groups={chipGroups} onSearch={onCreateCatalog} />
-
-                  {/* "Popular in" — curated catalogs this product belongs
-                      to. Tap a pill to open that catalog's feed. */}
-                  {onCreateCatalog && (
-                    <ProductCatalogPills catalogs={productCatalogs} onOpenCatalog={onCreateCatalog} />
-                  )}
-                </div>
-              </div>
+            {/* "Popular in" — curated catalogs this product belongs to. */}
+            {hasCatalogPills && (
+              <ProductCatalogPills catalogs={productCatalogs} onOpenCatalog={onCreateCatalog!} />
             )}
 
-            {/* "More from <brand>" rail - fills the negative space below
-                the Shop drawer in the info column with same-brand-mate
-                creatives. Cross-brand discovery happens below in the
-                "More like this" feed. */}
+            {/* "More from <brand>" rail — same-brand creatives. */}
             {brandCreatives && brandCreatives.length > 0 && onOpenCreative && (
               <section className="pd-info-brand-rail" aria-label={`More from ${product.brand || 'this brand'}`}>
                 <h2 className="pd-info-brand-rail-title">
@@ -1673,10 +1452,6 @@ export default function ProductPage({
                 </div>
               </section>
             )}
-            {/* "More from this creator" rail removed from the product page:
-                a product detail is brand-scoped, so the "More from <brand>"
-                rail above is the correct same-source browse path. Mixing the
-                creator in here conflated the two entities. */}
             {graphPairs && graphPairs.length > 0 && (
               <section className="pd-info-brand-rail" aria-label="Pairs well with">
                 <h2 className="pd-info-brand-rail-title">
