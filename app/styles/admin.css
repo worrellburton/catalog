@@ -7262,3 +7262,21 @@ html.eq-page .gen-queue-host { display: none; }
   padding: 10px;
 }
 .admin-filters-menu > .admin-tab { margin-left: 0 !important; }
+
+/* Featured star on Admin → Creators (feeds the consumer /creators grid). */
+.admin-featured-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: none;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.admin-featured-toggle:hover { color: #f59e0b; background: rgba(245, 158, 11, 0.08); }
+.admin-featured-toggle.is-on { color: #f59e0b; }
+.admin-featured-toggle:disabled { opacity: 0.5; cursor: default; }

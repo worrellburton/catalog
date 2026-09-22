@@ -1,0 +1,176 @@
+/* ── Primary site nav (Creators · Brands · Products · Catalogs) ──────────
+   Sits beside the wordmark in the consumer header. Paper Catalog eyebrows:
+   tracked small caps in soft ink, the current page underlined in ink.
+   Desktop only — on phones the same four live in the account menu. */
+.header-nav {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  margin-left: 34px;
+}
+.header-nav-link {
+  position: relative;
+  padding: 8px 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--pc-ink-soft);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+.header-nav-link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 2px;
+  height: 1px;
+  background: var(--pc-ink);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.18s ease;
+}
+.header-nav-link:hover,
+.header-nav-link:focus-visible,
+.header-nav-link.is-open,
+.header-nav-link.is-active { color: var(--pc-ink); outline: none; }
+.header-nav-link.is-active::after,
+.header-nav-link.is-open::after { transform: scaleX(1); }
+@media (max-width: 768px) {
+  .header-nav { display: none; }
+}
+
+/* ── Products mega menu ───────────────────────────────────────────────────
+   A full-width sheet that drops from under the header row. It sits just
+   BELOW the header in the stack (header is z 100) so the wordmark and nav
+   stay live on top and the sheet reads as the header's own backdrop
+   unfolding. Frosted near-black over the feed, one hairline at the foot. */
+.mega-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 99;
+  padding-top: 74px;
+  background: rgba(12, 12, 12, 0.94);
+  -webkit-backdrop-filter: blur(22px) saturate(1.1);
+  backdrop-filter: blur(22px) saturate(1.1);
+  border-bottom: 1px solid var(--pc-rule);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: opacity 0.22s ease, transform 0.26s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 0.22s;
+}
+.mega-menu.is-open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition: opacity 0.22s ease, transform 0.26s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s;
+}
+.light-mode .mega-menu { background: rgba(250, 248, 244, 0.94); }
+.mega-menu-inner {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 18px 44px 34px;
+}
+.mega-menu-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 18px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--pc-rule);
+}
+.mega-menu-head > div { display: flex; flex-direction: column; gap: 8px; }
+.mega-menu-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--pc-serif);
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--pc-ink);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 6px;
+  text-decoration-thickness: 1px;
+  transition: text-decoration-color 0.15s ease;
+}
+.mega-menu-all svg { color: var(--pc-ink-soft); transition: transform 0.18s ease; }
+.mega-menu-all:hover { text-decoration-color: var(--pc-ink-soft); }
+.mega-menu-all:hover svg { transform: translate(2px, -2px); }
+.mega-menu-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 28px 40px;
+}
+.mega-menu-dept {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--pc-ink-soft);
+  padding-bottom: 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--pc-rule);
+}
+.mega-menu-list { list-style: none; margin: 0; padding: 0; }
+.mega-menu-type {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 2px;
+  border: none;
+  border-bottom: 1px solid transparent;
+  background: none;
+  font-family: inherit;
+  color: var(--pc-ink);
+  cursor: pointer;
+  text-align: left;
+  transition: padding 0.18s ease;
+}
+.mega-menu-type-icon {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  color: var(--pc-ink-soft);
+  transition: color 0.15s ease;
+  flex-shrink: 0;
+}
+.mega-menu-type-name {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--pc-serif);
+  font-size: 17px;
+  text-transform: capitalize;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mega-menu-type-count {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--pc-ink-soft);
+}
+.mega-menu-type:hover { padding-left: 8px; }
+.mega-menu-type:hover .mega-menu-type-icon { color: var(--pc-ink); }
+.mega-menu-type:focus-visible { outline: 1px solid var(--pc-ink-soft); outline-offset: 2px; }
+@media (max-width: 768px) {
+  .mega-menu { display: none; }
+}

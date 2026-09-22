@@ -209,6 +209,12 @@ export default defineConfig({
             route("comments/:type/:slug", "routes/_app-stub.tsx", { id: "deeplink-comments" });
             route("earnings", "routes/_app-stub.tsx", { id: "deeplink-earnings" });
             route("my-looks", "routes/_app-stub.tsx", { id: "deeplink-my-looks" });
+            // Directory pages (header nav). Same shell; Home reads the path.
+            route("creators", "routes/_app-stub.tsx", { id: "dir-creators" });
+            route("brands", "routes/_app-stub.tsx", { id: "dir-brands" });
+            route("products", "routes/_app-stub.tsx", { id: "dir-products" });
+            route("products/:type", "routes/_app-stub.tsx", { id: "dir-products-type" });
+            route("catalogs", "routes/_app-stub.tsx", { id: "dir-catalogs" });
           });
 
           route("home2", "routes/home2.tsx");

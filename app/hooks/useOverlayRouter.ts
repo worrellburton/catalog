@@ -121,8 +121,14 @@ export function useOverlayRouter({
     const slug = brandSlug(brandFilter);
     if (!slug) return;
     const target = `/b/${slug}`;
-    if (window.location.pathname !== target) {
-      window.history.replaceState({}, '', target);
+    const current = window.location.pathname;
+    if (current === target) return;
+    // Brand → brand swaps replace; anything else (the feed, the /brands
+    // directory) pushes, so Back returns to where the brand was opened from.
+    if (current.startsWith('/b/')) {
+      window.history.replaceState({ overlay: 'brand' }, '', target);
+    } else {
+      window.history.pushState({ overlay: 'brand' }, '', target);
     }
   }, [brandFilter]);
 
