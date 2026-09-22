@@ -1804,16 +1804,13 @@
    no gradients, no glows; every element is backed by real data. Colors
    come from three tokens so light mode is one override. */
 .pd-info--catalog {
-  --pd-ink: #f3efe7;
-  --pd-ink-soft: rgba(243, 239, 231, 0.62);
-  --pd-rule: rgba(243, 239, 231, 0.16);
-  --pd-serif: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, 'Times New Roman', serif;
+  /* The Paper Catalog tokens live on :root / .light-mode in base.css
+     (--pc-*); these --pd-* names are local aliases the rules below use. */
+  --pd-ink: var(--pc-ink);
+  --pd-ink-soft: var(--pc-ink-soft);
+  --pd-rule: var(--pc-rule);
+  --pd-serif: var(--pc-serif);
   padding-top: 32px;
-}
-.light-mode .pd-info--catalog {
-  --pd-ink: #16140f;
-  --pd-ink-soft: rgba(22, 20, 15, 0.6);
-  --pd-rule: rgba(22, 20, 15, 0.16);
 }
 .pd-info--catalog .pd-info-inner { gap: 0; }
 

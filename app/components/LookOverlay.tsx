@@ -12,6 +12,7 @@ import { useCommentsEnabled } from '~/hooks/useCommentsEnabled';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import CreativeCardV2 from './CreativeCardV2';
 import { sortByGarmentRole } from '~/utils/garmentOrder';
+import { formatPostedDate } from '~/utils/posted-date';
 import ContinuousFeed from './ContinuousFeed';
 import { useActiveGenderFilter } from '~/hooks/useActiveGenderFilter';
 import { useTrailVideo, useTrailVideoManager } from './TrailVideoHost';
@@ -773,6 +774,16 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // Products in garment-role order, computed once per look (the regex role
   // inference used to run inline in JSX on every render).
   const sortedProducts = useMemo(() => sortByGarmentRole(look.products), [look.products]);
+  // Desktop head row: the curator's name (static-seed profile first, then the
+  // per-look fields services/looks.ts fills from the publisher's profile),
+  // the posted date and the product count.
+  const headCreatorName = creatorData?.displayName
+    || look.creatorDisplayName
+    || (look.creator?.startsWith('user:') ? '' : look.creator)
+    || '';
+  const headFirstName = headCreatorName.split(' ')[0];
+  const headPostedDate = formatPostedDate(look.created_at);
+  const openCreatorCatalog = () => { handleClose(); onOpenCreator(look.creator); };
 
   // Cleared on unmount: if the layer is torn down mid-slide (logo home reset,
   // browser Back) the deferred onClose() must not fire against a parent
@@ -1195,6 +1206,32 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               </button>
             </div>
 
+            {/* Desktop top row (Paper Catalog): curator, posted date, product
+                count, and the way back to their catalog. Hidden on mobile,
+                where the creator chip rides on the video. */}
+            {headCreatorName && (
+              <div className="look-catalog-head">
+                <div className="look-catalog-head-main">
+                  <span className="look-catalog-head-eyebrow">Curated by</span>
+                  <button type="button" className="look-catalog-head-name" onClick={openCreatorCatalog}>
+                    {headCreatorName}
+                  </button>
+                </div>
+                <div className="look-catalog-head-side">
+                  <button type="button" className="look-catalog-head-back" onClick={openCreatorCatalog}>
+                    {headFirstName}&rsquo;s catalog
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" />
+                    </svg>
+                  </button>
+                  <span className="look-catalog-head-meta">
+                    {headPostedDate && <span>{headPostedDate}</span>}
+                    <span>{look.products.length} {look.products.length === 1 ? 'product' : 'products'}</span>
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Creator row — prefer the static-seed creator entry if
                 this look is from a hardcoded handle (@lilywittman etc.),
                 otherwise fall back to the per-look fields that
@@ -1306,7 +1343,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   <div className="look-about-actions">
                     <button
                       className="look-creator-about-btn"
-                      onClick={() => { handleClose(); onOpenCreator(look.creator); }}
+                      onClick={openCreatorCatalog}
                     >
                       {(look.creatorAvatar || creatorData?.avatar) && (
                         <img

@@ -24,6 +24,15 @@
   --header-height: 64px;
   --overlay-bg: rgba(10, 10, 10, 0.95);
 
+  /* ── Paper Catalog tokens (CLAUDE.md → "Named style: Paper Catalog") ──
+     Warm off-white ink on the dark surface, soft ink for eyebrows / prices,
+     a hairline rule, and the serif display stack. Used by the product page
+     info column, the look page column and the creator page header. */
+  --pc-ink: #f3efe7;
+  --pc-ink-soft: rgba(243, 239, 231, 0.62);
+  --pc-rule: rgba(243, 239, 231, 0.16);
+  --pc-serif: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, 'Times New Roman', serif;
+
   /* ── Detail-hero video enhancement (ProductPage + LookOverlay only) ──
      The generated clips top out at a ≤834px-wide source (the "1080" HLS
      rung is upscaled, no real detail), so a full-screen hero is always
@@ -59,6 +68,12 @@
   :root {
     --hero-video-enhance: contrast(1.045) saturate(1.06);
   }
+}
+
+.light-mode {
+  --pc-ink: #16140f;
+  --pc-ink-soft: rgba(22, 20, 15, 0.6);
+  --pc-rule: rgba(22, 20, 15, 0.16);
 }
 
 body {

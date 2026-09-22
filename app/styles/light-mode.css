@@ -63,33 +63,6 @@
   background: rgba(0, 0, 0, 0.1);
 }
 
-.light-mode .look-tabs {
-  border-bottom-color: rgba(0, 0, 0, 0.1);
-}
-
-.light-mode .look-tab {
-  color: rgba(0, 0, 0, 0.4);
-}
-
-.light-mode .look-tab:hover {
-  color: rgba(0, 0, 0, 0.7);
-}
-
-.light-mode .look-tab.active {
-  color: #1a1a1a;
-  border-bottom-color: #1a1a1a;
-}
-
-.light-mode .look-tab-count {
-  background: rgba(0, 0, 0, 0.07);
-  color: rgba(0, 0, 0, 0.45);
-}
-
-.light-mode .look-tab.active .look-tab-count {
-  background: rgba(0, 0, 0, 0.1);
-  color: #1a1a1a;
-}
-
 .light-mode .look-creator-row:hover {
   opacity: 0.65;
 }
@@ -104,41 +77,6 @@
 
 .light-mode .look-save-count {
   color: rgba(0, 0, 0, 0.4);
-}
-
-.light-mode .product-brand {
-  color: rgba(0, 0, 0, 0.45);
-}
-
-.light-mode .product-card-name {
-  color: #1a1a1a;
-}
-
-.light-mode .product-card-price {
-  color: rgba(0, 0, 0, 0.5);
-}
-
-.light-mode .product-card {
-  border-bottom-color: rgba(0, 0, 0, 0.07);
-}
-
-.light-mode .product-card-thumb {
-  background: rgba(0, 0, 0, 0.06);
-}
-
-.light-mode .look-creator-about-bio {
-  color: rgba(0, 0, 0, 0.55);
-}
-
-.light-mode .look-creator-about-btn {
-  background: rgba(0, 0, 0, 0.06);
-  border-color: rgba(0, 0, 0, 0.1);
-  color: rgba(0, 0, 0, 0.7);
-}
-
-.light-mode .look-creator-about-btn:hover {
-  background: rgba(0, 0, 0, 0.1);
-  color: #1a1a1a;
 }
 
 .light-mode .look-feed-section {
