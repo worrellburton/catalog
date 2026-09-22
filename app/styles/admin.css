@@ -7250,3 +7250,15 @@ html.eq-page .gen-queue-host { display: none; }
   justify-content: center;
 }
 .admin-detail-hover-regen:disabled { cursor: default; opacity: 0.6; }
+/* "More filters" menu on the Products tab — the secondary buckets wrap as
+   chips; the date picker sits underneath. */
+.admin-filters-menu {
+  right: 0;
+  left: auto;
+  min-width: 420px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px;
+}
+.admin-filters-menu > .admin-tab { margin-left: 0 !important; }

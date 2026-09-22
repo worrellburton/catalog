@@ -12,6 +12,8 @@ interface ProductDetailsHoverProps {
   haiku: string | null | undefined;
   barcode: string | null | undefined;
   barcodeType: string | null | undefined;
+  /** How the product got into the catalog (the former Method column). */
+  sourceLabel?: string | null;
   regenerating?: boolean;
   /** Present when the row has a cloud id and the Haiku read can be re-run. */
   onRegenerate?: () => void;
@@ -32,7 +34,7 @@ function stop(e: MouseEvent) { e.stopPropagation(); }
  * has data so a glance still tells you whether there's anything to see.
  */
 export default function ProductDetailsHover({
-  gender, fabric, sizeFit, materialsCare, haiku, barcode, barcodeType, regenerating = false, onRegenerate,
+  gender, fabric, sizeFit, materialsCare, haiku, barcode, barcodeType, sourceLabel, regenerating = false, onRegenerate,
 }: ProductDetailsHoverProps) {
   const rows: Array<{ label: string; value: string | null | undefined }> = [
     { label: 'Gender', value: gender ? (GENDER_LABEL[gender] ?? gender) : null },
@@ -40,6 +42,7 @@ export default function ProductDetailsHover({
     { label: 'Size & fit', value: sizeFit },
     { label: 'Materials & care', value: materialsCare },
     { label: barcodeType ? `Barcode · ${barcodeType}` : 'Barcode', value: barcode },
+    { label: 'Added via', value: sourceLabel },
   ];
   const hasAny = rows.some(r => !!r.value) || !!haiku;
   return (

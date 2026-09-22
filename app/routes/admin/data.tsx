@@ -546,7 +546,9 @@ export default function AdminData() {
   const [productGender, setProductGender] = useState<'all' | 'male' | 'female' | 'unisex'>('all');
   const [productFilter, setProductFilter] = useState<'all' | 'no-creative' | 'active' | 'inactive' | 'untagged' | 'soft-deleted' | 'automatic' | 'seeded' | 'affiliate' | 'no-affiliate'>(
     // Deep-link from /admin/seeding: ?tab=products&filters=seeding
-    () => (searchParams.get('filters') === 'seeding' ? 'seeded' : 'all'),
+    // Default is the LIVE bucket — hidden rows are ~94% of the catalog and
+    // the working set is what shoppers can see.
+    () => (searchParams.get('filters') === 'seeding' ? 'seeded' : 'active'),
   );
   // Optional deep-link: ?target=<seed_target_id> narrows products to one seeding
   // target; ?label=<term> is just the display label for the filter chip.
@@ -567,6 +569,17 @@ export default function AdminData() {
   const [dateRefIsoEnd, setDateRefIsoEnd] = useState<string>('');
   const [datePopoverOpen, setDatePopoverOpen] = useState(false);
   const datePopoverRef = useRef<HTMLDivElement | null>(null);
+  // "More filters" dropdown on the Products tab (secondary buckets + date).
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
+  const moreFiltersRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!moreFiltersOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (moreFiltersRef.current && !moreFiltersRef.current.contains(e.target as Node)) setMoreFiltersOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [moreFiltersOpen]);
   // Close on click-away or Escape so the popover doesn't sit stuck
   // open when the admin clicks back into a row.
   useEffect(() => {
@@ -628,6 +641,9 @@ export default function AdminData() {
     }
   }, [dateFilter, dateWindow]);
 
+  const moreFiltersActive =
+    (['no-creative', 'untagged', 'affiliate', 'no-affiliate', 'automatic', 'seeded', 'soft-deleted'].includes(productFilter) ? 1 : 0)
+    + (dateFilter !== 'all' ? 1 : 0);
   const dateFilterLabel = useMemo(() => {
     switch (dateFilter) {
       case 'all':     return 'All time';
@@ -1111,11 +1127,6 @@ export default function AdminData() {
     startedAt: number;
   }
   const [genJobs, setGenJobs] = useState<Map<string, GenJob>>(new Map());
-  // Which row's inline Links/affiliates dropdown is open.
-  const [openLinksRow, setOpenLinksRow] = useState<string | null>(null);
-
-  // Which row's inline Tags dropdown is open (keyed by `${brand}-${name}`).
-  const [openTagsRow, setOpenTagsRow] = useState<string | null>(null);
   // Which row's inline Creative+Photos dropdown is open.
   const [openDetailRow, setOpenCreativeRow] = useState<string | null>(null);
   useEffect(() => {
@@ -1124,24 +1135,6 @@ export default function AdminData() {
     document.addEventListener('keydown', keyHandler);
     return () => document.removeEventListener('keydown', keyHandler);
   }, [openDetailRow]);
-
-  // Tags is now an inline expanded row like Links - close only via the button
-  // or Escape.
-  useEffect(() => {
-    if (!openTagsRow) return;
-    const keyHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenTagsRow(null); };
-    document.addEventListener('keydown', keyHandler);
-    return () => document.removeEventListener('keydown', keyHandler);
-  }, [openTagsRow]);
-
-  // Links is now an inline expanded row (not a floating popup) so the only
-  // way to close it is to click View again or press Escape.
-  useEffect(() => {
-    if (!openLinksRow) return;
-    const keyHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenLinksRow(null); };
-    document.addEventListener('keydown', keyHandler);
-    return () => document.removeEventListener('keydown', keyHandler);
-  }, [openLinksRow]);
 
   // Amazon (Rainforest) lookup modal
   const [showAmazonLookup, setShowAmazonLookup] = useState(false);
@@ -1774,20 +1767,6 @@ export default function AdminData() {
   // real DB data lands. The seed merge still drives the Looks tab and
   // creator counts; we just don't paint it as if it were the catalog.
   const [productsLoading, setProductsLoading] = useState(true);
-  // Stats column group on the Products table - In Looks, Creators,
-  // Impressions, Saves, Clicks, Date Added all hide behind a single
-  // "Stats" header by default. Click the chevron to expand and see
-  // every column. Persisted so admins don't have to re-expand on
-  // every page load.
-  const [statsExpanded, setStatsExpanded] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    try { return window.localStorage.getItem('admin:products-stats-expanded') === '1'; }
-    catch { return false; }
-  });
-  useEffect(() => {
-    try { window.localStorage.setItem('admin:products-stats-expanded', statsExpanded ? '1' : '0'); }
-    catch { /* quota */ }
-  }, [statsExpanded]);
   const [adProductIds, setAdProductIds] = useState<Set<string>>(new Set());
   const [adVideoMap, setAdVideoMap] = useState<Map<string, string[]>>(new Map());
   // Model + prompt metadata keyed by video_url so each rendered thumb can
@@ -4535,270 +4514,290 @@ export default function AdminData() {
                 </button>
               ))}
             </span>
-            <button
-              className={`admin-tab ${productFilter === 'no-creative' ? 'active' : ''}`}
-              onClick={() => setProductFilter('no-creative')}
-            >
-              Show without creative
-              <span className="admin-tab-badge">
-                {allProducts.filter(p =>
-                  !p.hasCreative
-                  && !deletedProductKeys.has(`${p.brand}-${p.name}`)
-                ).length}
-              </span>
-            </button>
-            <button
-              className={`admin-tab ${productFilter === 'untagged' ? 'active' : ''}`}
-              onClick={() => setProductFilter('untagged')}
-              title="Products missing a gender tag - leak into every shopper's feed because untagged products bypass the gender filter"
-            >
-              Untagged
-              <span className="admin-tab-badge">
-                {allProducts.filter(p =>
-                  p.gender == null
-                  && !deletedProductKeys.has(`${p.brand}-${p.name}`)
-                ).length}
-              </span>
-            </button>
-            <button
-              className={`admin-tab ${productFilter === 'affiliate' ? 'active' : ''}`}
-              onClick={() => setProductFilter('affiliate')}
-              title="Products whose link has a real affiliate program (tracked affiliate.com URL, known retailer, or brand program)"
-            >
-              Affiliate links
-              <span className="admin-tab-badge">
-                {allProducts.filter(p =>
-                  !deletedProductKeys.has(`${p.brand}-${p.name}`)
-                  && getProductAffiliateProviders(p as { brand: string | null; url: string | null }).some(a => a.rateNumeric > 0 || a.connected)
-                ).length}
-              </span>
-            </button>
-            <button
-              className={`admin-tab ${productFilter === 'no-affiliate' ? 'active' : ''}`}
-              onClick={() => setProductFilter('no-affiliate')}
-              title="Products with no detected affiliate program — clickouts still monetize through the Shopnomix wrapper, but there's no program-level link"
-            >
-              No affiliate links
-              <span className="admin-tab-badge">
-                {allProducts.filter(p =>
-                  !deletedProductKeys.has(`${p.brand}-${p.name}`)
-                  && !getProductAffiliateProviders(p as { brand: string | null; url: string | null }).some(a => a.rateNumeric > 0 || a.connected)
-                ).length}
-              </span>
-            </button>
-            {/* Date-added filter. Spacer pushes it to the right edge of
-                the tab row so it reads as a tool, not another category.
-                Soft-delete tab follows it on the far right, styled red
-                so the destructive bucket is visually unmistakable. */}
-            <div style={{ flex: 1 }} />
-            <div ref={datePopoverRef} style={{ position: 'relative' }}>
+            {/* Everything that isn't Show all / Showing / Hidden / gender lives
+                behind one More filters button, so the filter row is a single
+                line. The count shows how many of these are engaged. */}
+            <div ref={moreFiltersRef} style={{ position: 'relative', marginLeft: 'auto' }}>
               <button
                 type="button"
-                className={`admin-tab ${dateFilter !== 'all' ? 'active' : ''}`}
-                onClick={() => setDatePopoverOpen(v => !v)}
-                title="Filter by when the product was added to the catalog"
+                className={`admin-tab ${moreFiltersActive > 0 ? 'active' : ''}`}
+                onClick={() => setMoreFiltersOpen(v => !v)}
+                aria-haspopup="menu"
+                aria-expanded={moreFiltersOpen}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                  <line x1="16" y1="2" x2="16" y2="6" />
-                  <line x1="8" y1="2" x2="8" y2="6" />
-                  <line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
-                <span>Date added: {dateFilterLabel}</span>
-                {dateFilter !== 'all' && (
-                  <span
-                    role="button"
-                    aria-label="Clear date filter"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDateFilter('all');
-                      setDateRefIso('');
-                      setDateRefIsoEnd('');
-                    }}
-                    style={{ marginLeft: 4, opacity: 0.7, cursor: 'pointer' }}
-                  >
-                    ×
-                  </span>
-                )}
+                More filters
+                {moreFiltersActive > 0 && <span className="admin-tab-badge">{moreFiltersActive}</span>}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
               </button>
-              {datePopoverOpen && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 6px)',
-                    right: 0,
-                    minWidth: 260,
-                    background: '#fff',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: 12,
-                    boxShadow: '0 18px 50px rgba(0, 0, 0, 0.18)',
-                    padding: 12,
-                    zIndex: 30,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 8,
-                  }}
+              {moreFiltersOpen && (
+                <div role="menu" className="admin-tools-menu admin-filters-menu">
+                <button
+                  className={`admin-tab ${productFilter === 'no-creative' ? 'active' : ''}`}
+                  onClick={() => setProductFilter('no-creative')}
                 >
-                  <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#666' }}>
-                    Quick ranges
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                    {([
-                      ['all',   'All time'],
-                      ['today', 'Today'],
-                      ['week',  'This week'],
-                      ['month', 'This month'],
-                    ] as Array<[DateFilterMode, string]>).map(([mode, label]) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        className={`admin-tab ${dateFilter === mode ? 'active' : ''}`}
-                        onClick={() => {
-                          setDateFilter(mode);
+                  Show without creative
+                  <span className="admin-tab-badge">
+                    {allProducts.filter(p =>
+                      !p.hasCreative
+                      && !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                    ).length}
+                  </span>
+                </button>
+                <button
+                  className={`admin-tab ${productFilter === 'untagged' ? 'active' : ''}`}
+                  onClick={() => setProductFilter('untagged')}
+                  title="Products missing a gender tag - leak into every shopper's feed because untagged products bypass the gender filter"
+                >
+                  Untagged
+                  <span className="admin-tab-badge">
+                    {allProducts.filter(p =>
+                      p.gender == null
+                      && !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                    ).length}
+                  </span>
+                </button>
+                <button
+                  className={`admin-tab ${productFilter === 'affiliate' ? 'active' : ''}`}
+                  onClick={() => setProductFilter('affiliate')}
+                  title="Products whose link has a real affiliate program (tracked affiliate.com URL, known retailer, or brand program)"
+                >
+                  Affiliate links
+                  <span className="admin-tab-badge">
+                    {allProducts.filter(p =>
+                      !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                      && getProductAffiliateProviders(p as { brand: string | null; url: string | null }).some(a => a.rateNumeric > 0 || a.connected)
+                    ).length}
+                  </span>
+                </button>
+                <button
+                  className={`admin-tab ${productFilter === 'no-affiliate' ? 'active' : ''}`}
+                  onClick={() => setProductFilter('no-affiliate')}
+                  title="Products with no detected affiliate program — clickouts still monetize through the Shopnomix wrapper, but there's no program-level link"
+                >
+                  No affiliate links
+                  <span className="admin-tab-badge">
+                    {allProducts.filter(p =>
+                      !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                      && !getProductAffiliateProviders(p as { brand: string | null; url: string | null }).some(a => a.rateNumeric > 0 || a.connected)
+                    ).length}
+                  </span>
+                </button>
+                {/* Date-added filter. Spacer pushes it to the right edge of
+                    the tab row so it reads as a tool, not another category.
+                    Soft-delete tab follows it on the far right, styled red
+                    so the destructive bucket is visually unmistakable. */}
+                <div ref={datePopoverRef} style={{ position: 'relative' }}>
+                  <button
+                    type="button"
+                    className={`admin-tab ${dateFilter !== 'all' ? 'active' : ''}`}
+                    onClick={() => setDatePopoverOpen(v => !v)}
+                    title="Filter by when the product was added to the catalog"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                      <line x1="16" y1="2" x2="16" y2="6" />
+                      <line x1="8" y1="2" x2="8" y2="6" />
+                      <line x1="3" y1="10" x2="21" y2="10" />
+                    </svg>
+                    <span>Date added: {dateFilterLabel}</span>
+                    {dateFilter !== 'all' && (
+                      <span
+                        role="button"
+                        aria-label="Clear date filter"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDateFilter('all');
                           setDateRefIso('');
                           setDateRefIsoEnd('');
-                          setDatePopoverOpen(false);
                         }}
-                        style={{ justifyContent: 'center' }}
+                        style={{ marginLeft: 4, opacity: 0.7, cursor: 'pointer' }}
                       >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#666', marginTop: 6 }}>
-                    Custom
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <select
-                      value={dateFilter === 'before' || dateFilter === 'on' || dateFilter === 'after' || dateFilter === 'between' ? dateFilter : 'on'}
-                      onChange={(e) => {
-                        const next = e.target.value as DateFilterMode;
-                        setDateFilter(next);
-                        if (next !== 'between') setDateRefIsoEnd('');
+                        ×
+                      </span>
+                    )}
+                  </button>
+                  {datePopoverOpen && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 6px)',
+                        right: 0,
+                        minWidth: 260,
+                        background: '#fff',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: 12,
+                        boxShadow: '0 18px 50px rgba(0, 0, 0, 0.18)',
+                        padding: 12,
+                        zIndex: 30,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 8,
                       }}
-                      style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13 }}
                     >
-                      <option value="before">Before</option>
-                      <option value="on">On</option>
-                      <option value="after">After</option>
-                      <option value="between">Between</option>
-                    </select>
-                    <input
-                      type="date"
-                      value={dateRefIso}
-                      onChange={(e) => setDateRefIso(e.target.value)}
-                      style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13, flex: 1, minWidth: 0 }}
-                    />
-                  </div>
-                  {dateFilter === 'between' && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 12, color: '#666', width: 70, textAlign: 'right' }}>and</span>
-                      <input
-                        type="date"
-                        value={dateRefIsoEnd}
-                        onChange={(e) => setDateRefIsoEnd(e.target.value)}
-                        style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13, flex: 1, minWidth: 0 }}
-                      />
+                      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#666' }}>
+                        Quick ranges
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                        {([
+                          ['all',   'All time'],
+                          ['today', 'Today'],
+                          ['week',  'This week'],
+                          ['month', 'This month'],
+                        ] as Array<[DateFilterMode, string]>).map(([mode, label]) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            className={`admin-tab ${dateFilter === mode ? 'active' : ''}`}
+                            onClick={() => {
+                              setDateFilter(mode);
+                              setDateRefIso('');
+                              setDateRefIsoEnd('');
+                              setDatePopoverOpen(false);
+                            }}
+                            style={{ justifyContent: 'center' }}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#666', marginTop: 6 }}>
+                        Custom
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <select
+                          value={dateFilter === 'before' || dateFilter === 'on' || dateFilter === 'after' || dateFilter === 'between' ? dateFilter : 'on'}
+                          onChange={(e) => {
+                            const next = e.target.value as DateFilterMode;
+                            setDateFilter(next);
+                            if (next !== 'between') setDateRefIsoEnd('');
+                          }}
+                          style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13 }}
+                        >
+                          <option value="before">Before</option>
+                          <option value="on">On</option>
+                          <option value="after">After</option>
+                          <option value="between">Between</option>
+                        </select>
+                        <input
+                          type="date"
+                          value={dateRefIso}
+                          onChange={(e) => setDateRefIso(e.target.value)}
+                          style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13, flex: 1, minWidth: 0 }}
+                        />
+                      </div>
+                      {dateFilter === 'between' && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 12, color: '#666', width: 70, textAlign: 'right' }}>and</span>
+                          <input
+                            type="date"
+                            value={dateRefIsoEnd}
+                            onChange={(e) => setDateRefIsoEnd(e.target.value)}
+                            style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13, flex: 1, minWidth: 0 }}
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
+                {/* Automatic — products discovered & added by the autonomous
+                    Claude + Gemini pipeline. AI accent (indigo + sparkle) so it
+                    reads as the auto bucket, not another plain category. */}
+                <button
+                  className={`admin-tab ${productFilter === 'automatic' ? 'active' : ''}`}
+                  onClick={() => setProductFilter('automatic')}
+                  title="Products added automatically by the Claude + Gemini pipeline"
+                  style={{
+                    marginLeft: 8,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: productFilter === 'automatic' ? '#4f46e5' : '#eef2ff',
+                    color: productFilter === 'automatic' ? '#fff' : '#4338ca',
+                    border: `1px solid ${productFilter === 'automatic' ? '#4338ca' : '#c7d2fe'}`,
+                    fontWeight: 600,
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 100 100" fill="currentColor" aria-hidden="true">
+                    <path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" />
+                  </svg>
+                  Automatic
+                  <span
+                    className="admin-tab-badge"
+                    style={{
+                      background: productFilter === 'automatic' ? 'rgba(255,255,255,0.22)' : '#c7d2fe',
+                      color: productFilter === 'automatic' ? '#fff' : '#3730a3',
+                    }}
+                  >
+                    {allProducts.filter(p =>
+                      (p as { source?: string | null }).source === AUTO_SOURCE
+                      && !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                    ).length}
+                  </span>
+                </button>
+                {/* Seeded — products fetched by the demand-driven Seeding loop
+                    (/admin/seeding). Teal accent so it reads as its own bucket. */}
+                <button
+                  className={`admin-tab ${productFilter === 'seeded' ? 'active' : ''}`}
+                  onClick={() => setProductFilter('seeded')}
+                  title="Products fetched by the Seeding loop (/admin/seeding)"
+                  style={{
+                    marginLeft: 8,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: productFilter === 'seeded' ? '#0d9488' : '#ccfbf1',
+                    color: productFilter === 'seeded' ? '#fff' : '#0f766e',
+                    border: `1px solid ${productFilter === 'seeded' ? '#0f766e' : '#99f6e4'}`,
+                    fontWeight: 600,
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <path d="M12 2v8M12 10c-3 0-5 2-5 5M12 10c3 0 5 2 5 5M5 22h14M12 13v9" />
+                  </svg>
+                  Seeded
+                  <span
+                    className="admin-tab-badge"
+                    style={{
+                      background: productFilter === 'seeded' ? 'rgba(255,255,255,0.22)' : '#99f6e4',
+                      color: productFilter === 'seeded' ? '#fff' : '#0f766e',
+                    }}
+                  >
+                    {allProducts.filter(p =>
+                      (p as { source?: string | null }).source === SEED_SOURCE
+                      && !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                    ).length}
+                  </span>
+                </button>
+                {/* Soft delete — far-right destructive bucket, styled red
+                    so it never reads as a normal filter category. */}
+                <button
+                  className={`admin-tab admin-tab--danger ${productFilter === 'soft-deleted' ? 'active' : ''}`}
+                  onClick={() => setProductFilter('soft-deleted')}
+                  title="Soft-deleted products. Open this bucket to permanently hard-delete (removes the row + analytics)."
+                  style={{
+                    marginLeft: 8,
+                    background: productFilter === 'soft-deleted' ? '#dc2626' : '#fee2e2',
+                    color: productFilter === 'soft-deleted' ? '#fff' : '#b91c1c',
+                    border: `1px solid ${productFilter === 'soft-deleted' ? '#b91c1c' : '#fecaca'}`,
+                    fontWeight: 600,
+                  }}
+                >
+                  Soft delete
+                  <span
+                    className="admin-tab-badge"
+                    style={{
+                      background: productFilter === 'soft-deleted' ? 'rgba(255,255,255,0.22)' : '#fecaca',
+                      color: productFilter === 'soft-deleted' ? '#fff' : '#991b1b',
+                    }}
+                  >
+                    {allProducts.filter(p => deletedProductKeys.has(`${p.brand}-${p.name}`)).length}
+                  </span>
+                </button>
+                </div>
               )}
             </div>
-            {/* Automatic — products discovered & added by the autonomous
-                Claude + Gemini pipeline. AI accent (indigo + sparkle) so it
-                reads as the auto bucket, not another plain category. */}
-            <button
-              className={`admin-tab ${productFilter === 'automatic' ? 'active' : ''}`}
-              onClick={() => setProductFilter('automatic')}
-              title="Products added automatically by the Claude + Gemini pipeline"
-              style={{
-                marginLeft: 8,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                background: productFilter === 'automatic' ? '#4f46e5' : '#eef2ff',
-                color: productFilter === 'automatic' ? '#fff' : '#4338ca',
-                border: `1px solid ${productFilter === 'automatic' ? '#4338ca' : '#c7d2fe'}`,
-                fontWeight: 600,
-              }}
-            >
-              <svg width="13" height="13" viewBox="0 0 100 100" fill="currentColor" aria-hidden="true">
-                <path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" />
-              </svg>
-              Automatic
-              <span
-                className="admin-tab-badge"
-                style={{
-                  background: productFilter === 'automatic' ? 'rgba(255,255,255,0.22)' : '#c7d2fe',
-                  color: productFilter === 'automatic' ? '#fff' : '#3730a3',
-                }}
-              >
-                {allProducts.filter(p =>
-                  (p as { source?: string | null }).source === AUTO_SOURCE
-                  && !deletedProductKeys.has(`${p.brand}-${p.name}`)
-                ).length}
-              </span>
-            </button>
-            {/* Seeded — products fetched by the demand-driven Seeding loop
-                (/admin/seeding). Teal accent so it reads as its own bucket. */}
-            <button
-              className={`admin-tab ${productFilter === 'seeded' ? 'active' : ''}`}
-              onClick={() => setProductFilter('seeded')}
-              title="Products fetched by the Seeding loop (/admin/seeding)"
-              style={{
-                marginLeft: 8,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                background: productFilter === 'seeded' ? '#0d9488' : '#ccfbf1',
-                color: productFilter === 'seeded' ? '#fff' : '#0f766e',
-                border: `1px solid ${productFilter === 'seeded' ? '#0f766e' : '#99f6e4'}`,
-                fontWeight: 600,
-              }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <path d="M12 2v8M12 10c-3 0-5 2-5 5M12 10c3 0 5 2 5 5M5 22h14M12 13v9" />
-              </svg>
-              Seeded
-              <span
-                className="admin-tab-badge"
-                style={{
-                  background: productFilter === 'seeded' ? 'rgba(255,255,255,0.22)' : '#99f6e4',
-                  color: productFilter === 'seeded' ? '#fff' : '#0f766e',
-                }}
-              >
-                {allProducts.filter(p =>
-                  (p as { source?: string | null }).source === SEED_SOURCE
-                  && !deletedProductKeys.has(`${p.brand}-${p.name}`)
-                ).length}
-              </span>
-            </button>
-            {/* Soft delete — far-right destructive bucket, styled red
-                so it never reads as a normal filter category. */}
-            <button
-              className={`admin-tab admin-tab--danger ${productFilter === 'soft-deleted' ? 'active' : ''}`}
-              onClick={() => setProductFilter('soft-deleted')}
-              title="Soft-deleted products. Open this bucket to permanently hard-delete (removes the row + analytics)."
-              style={{
-                marginLeft: 8,
-                background: productFilter === 'soft-deleted' ? '#dc2626' : '#fee2e2',
-                color: productFilter === 'soft-deleted' ? '#fff' : '#b91c1c',
-                border: `1px solid ${productFilter === 'soft-deleted' ? '#b91c1c' : '#fecaca'}`,
-                fontWeight: 600,
-              }}
-            >
-              Soft delete
-              <span
-                className="admin-tab-badge"
-                style={{
-                  background: productFilter === 'soft-deleted' ? 'rgba(255,255,255,0.22)' : '#fecaca',
-                  color: productFilter === 'soft-deleted' ? '#fff' : '#991b1b',
-                }}
-              >
-                {allProducts.filter(p => deletedProductKeys.has(`${p.brand}-${p.name}`)).length}
-              </span>
-            </button>
           </div>
         {/* Automatic view — Add Products (count picker) + live pipeline
             progress. Only shown on the Automatic tab. */}
@@ -5467,33 +5466,7 @@ export default function AdminData() {
                 <th style={{ textAlign: 'center' }} title="Gender, fabric, size & fit, materials, Haiku read, barcode — hover the icon">Details</th>
                 <th style={{ textAlign: 'center' }} title="Live on the feed and in search. ★ = flagged elite in /admin/creative">Live</th>
                 <SortableTh label="Price" sortKey="price" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                {!statsExpanded && (
-                  <th
-                    className="admin-stats-col"
-                    style={{ textAlign: 'center', cursor: 'pointer', userSelect: 'none' }}
-                    onClick={() => setStatsExpanded(true)}
-                    title="Show In Looks, Creators, Impressions, Saves, Clicks"
-                  >
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      Stats
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                    </span>
-                  </th>
-                )}
-                {statsExpanded && (
-                  <>
-                    <th className="admin-stats-col" style={{ textAlign: 'center', cursor: 'pointer', userSelect: 'none', width: 24 }}
-                        onClick={() => setStatsExpanded(false)}
-                        title="Collapse stats columns">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-label="Collapse stats"><polyline points="15 18 9 12 15 6"/></svg>
-                    </th>
-                    <SortableTh className="admin-stats-col" label="In Looks" sortKey="lookCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                    <SortableTh className="admin-stats-col" label="Creators" sortKey="creatorCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                    <SortableTh className="admin-stats-col" label="Impressions" sortKey="impressions" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                    <SortableTh className="admin-stats-col" label="Saves" sortKey="saves" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                    <SortableTh className="admin-stats-col" label="Clicks" sortKey="clicks" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                  </>
-                )}
+                <SortableTh label="Activity" sortKey="impressions" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Added" sortKey="created_at" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th></th>
               </tr>
@@ -5584,11 +5557,9 @@ export default function AdminData() {
                   });
                   setLastSelectedIndex(i);
                 };
-                const linksOpen = openLinksRow === rowKey;
-                const tagsOpen = openTagsRow === rowKey;
                 const detailOpen = openDetailRow === rowKey;
-                const affiliates = linksOpen ? getProductAffiliateProviders(p) : [];
-                const rowTags = tagsOpen ? deriveTags(p.name, p.brand) : [];
+                const affiliates = detailOpen ? getProductAffiliateProviders(p) : [];
+                const rowTags = detailOpen ? deriveTags(p.name, p.brand) : [];
                 const rowImages: string[] = (p.images && p.images.length > 0)
                   ? p.images
                   : (p.image_url ? [p.image_url] : []);
@@ -5933,6 +5904,7 @@ export default function AdminData() {
                       haiku={(p as { haiku_context?: string | null }).haiku_context ?? null}
                       barcode={(p as { barcode?: string | null }).barcode ?? null}
                       barcodeType={(p as { barcode_type?: string | null }).barcode_type ?? null}
+                      sourceLabel={p.source ? (SOURCE_LABELS[p.source] || p.source) : null}
                       regenerating={!!p.id && regeneratingHaiku.has(p.id)}
                       onRegenerate={p.id ? () => { void regenerateHaiku(p.id!); } : undefined}
                     />
@@ -5953,95 +5925,30 @@ export default function AdminData() {
                     </div>
                   </td>
                   <td style={{ fontWeight: 600 }}>{p.price}</td>
-                  {!statsExpanded && (
-                    <td
-                      className="admin-stats-col"
-                      style={{ textAlign: 'center', fontSize: 12, cursor: 'pointer' }}
-                      onClick={(e) => { e.stopPropagation(); setStatsExpanded(true); }}
-                      title="Expand stats"
-                    >
-                      {/* Tiny inline summary so the cell isn't empty - e.g.
-                          "5 looks · 132 imp" - so admins glean signal without
-                          expanding when a row has activity. */}
-                      {(p.lookCount > 0 || p.impressions > 0)
-                        ? `${p.lookCount} look${p.lookCount === 1 ? '' : 's'}${p.impressions > 0 ? ` · ${p.impressions.toLocaleString()} imp` : ''}`
-                        : ' - '}
-                    </td>
-                  )}
-                  {statsExpanded && (
-                    <>
-                      <td className="admin-stats-col" onClick={(e) => { e.stopPropagation(); setStatsExpanded(false); }}
-                          style={{ width: 24, cursor: 'pointer' }} />
-                      <td className="admin-stats-col">{p.lookCount}</td>
-                      <td className="admin-stats-col">{p.creatorCount}</td>
-                      <td className="admin-stats-col">{p.impressions > 0 ? p.impressions.toLocaleString() : ' - '}</td>
-                      <td className="admin-stats-col">{p.saves}</td>
-                      <td className="admin-stats-col">{p.clicks}</td>
-                    </>
-                  )}
+                  <td style={{ textAlign: 'center', fontSize: 12, whiteSpace: 'nowrap' }} title="Looks · impressions — expand the row for creators, saves and clicks">
+                    {(p.lookCount > 0 || p.impressions > 0)
+                      ? `${p.lookCount} look${p.lookCount === 1 ? '' : 's'}${p.impressions > 0 ? ` · ${p.impressions.toLocaleString()} imp` : ''}`
+                      : ' - '}
+                  </td>
                   <td className="admin-cell-muted" style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                      <span>{formatDateAdded(p.created_at)}</span>
-                      <span>
-                    {p.source ? (
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '2px 8px',
-                        fontSize: 11,
-                        fontWeight: 600,
-                        borderRadius: 12,
-                        background: p.source === 'amazon'
-                          ? '#fef3c7'
-                          : p.source === 'google_shopping'
-                          ? '#dbeafe'
-                          : '#e9d5ff',
-                        color: p.source === 'amazon'
-                          ? '#92400e'
-                          : p.source === 'google_shopping'
-                          ? '#1d4ed8'
-                          : '#6b21a8',
-                      }}>
-                        {SOURCE_LABELS[p.source] || p.source}
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: 11, color: '#94a3b8' }}> - </span>
-                    )}
-                      </span>
-                    </div>
+                    {formatDateAdded(p.created_at)}
                   </td>
                   <td onClick={(e) => e.stopPropagation()} style={{ whiteSpace: 'nowrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <button
-                      className="admin-btn admin-btn-secondary"
-                      style={{ fontSize: 11, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setOpenTagsRow(tagsOpen ? null : rowKey);
-                      }}
-                      title={tagsOpen ? 'Close tags' : 'View tags'}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-                        <line x1="7" y1="7" x2="7.01" y2="7" />
-                      </svg>
-                      <span style={{ fontSize: 10, color: '#888' }}>{deriveTags(p.name, p.brand).length}</span>
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                        style={{ transform: tagsOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
-                      >
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </button>
+                    {/* One expander per row: photos, primary pick, stats, tags
+                        and links all live in the panel below. */}
                     <button
                       className="admin-btn admin-btn-secondary"
                       style={{ fontSize: 11, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setOpenLinksRow(linksOpen ? null : rowKey);
+                        setOpenCreativeRow(detailOpen ? null : rowKey);
                       }}
+                      aria-expanded={detailOpen}
                     >
-                      View
+                      Details
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                        style={{ transform: linksOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
+                        style={{ transform: detailOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
                       >
                         <polyline points="6 9 12 15 18 9" />
                       </svg>
@@ -6186,7 +6093,23 @@ export default function AdminData() {
                 {detailOpen && (
                   <tr className="admin-product-detail-row">
                     <td colSpan={15} style={{ padding: 0, background: '#fafbff' }}>
-                      <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: (tagsOpen || linksOpen) ? undefined : '1px solid #e5e7eb' }}>
+                      <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb' }}>
+                        {/* Activity strip — the numbers that used to be five
+                            optional table columns. */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, marginBottom: 14, fontSize: 12, color: '#475569' }}>
+                          {([
+                            ['In looks', p.lookCount],
+                            ['Creators', p.creatorCount],
+                            ['Impressions', p.impressions],
+                            ['Saves', p.saves],
+                            ['Clicks', p.clicks],
+                          ] as Array<[string, number]>).map(([label, n]) => (
+                            <span key={label} style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
+                              <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#888' }}>{label}</span>
+                              <strong style={{ color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>{n.toLocaleString()}</strong>
+                            </span>
+                          ))}
+                        </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 160px) minmax(120px, 160px) minmax(120px, 160px) 1fr 1fr', gap: 24 }}>
                           {/* Primary preview pinned to the far left so
                               the admin can see the current pick without
@@ -7139,10 +7062,10 @@ export default function AdminData() {
                     </td>
                   </tr>
                 )}
-                {tagsOpen && (
+                {detailOpen && (
                   <tr className="admin-product-tags-row">
                     <td colSpan={15} style={{ padding: 0, background: '#fafbff' }}>
-                      <div style={{ padding: '12px 20px', borderTop: '1px solid #e5e7eb', borderBottom: linksOpen ? undefined : '1px solid #e5e7eb' }}>
+                      <div style={{ padding: '12px 20px', borderTop: '1px solid #e5e7eb' }}>
                         <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
                           Tags
                         </div>
@@ -7164,7 +7087,7 @@ export default function AdminData() {
                     </td>
                   </tr>
                 )}
-                {linksOpen && (
+                {detailOpen && (
                   <tr className="admin-product-links-row">
                     <td colSpan={15} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}>
