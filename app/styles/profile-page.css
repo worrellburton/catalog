@@ -21,12 +21,16 @@ html[data-shell="catalog-app"] .profile-page-overlay {
   padding: 24px 20px 80px;
 }
 
+/* ── Paper Catalog ─────────────────────────────────────────────────────
+   Tokens (--pc-*) live in base.css. Hairline rules and tracked eyebrows do
+   the separating: underline inputs, no filled panels, no pills. */
+
 /* Header */
 .profile-page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
 
 .profile-page-header-left {
@@ -38,20 +42,21 @@ html[data-shell="catalog-app"] .profile-page-overlay {
 .profile-page-back {
   background: none;
   border: none;
-  color: #aaa;
+  color: var(--pc-ink-soft);
   cursor: pointer;
   padding: 6px;
-  border-radius: 8px;
-  transition: all 0.15s;
+  transition: color 0.15s;
 }
-.profile-page-back:hover { color: #fff; background: rgba(255,255,255,0.08); }
+.profile-page-back:hover { color: var(--pc-ink); }
 
 .profile-page-title {
-  font-size: 22px;
-  font-weight: 600;
-  color: #fff;
+  font-family: var(--pc-serif);
+  font-size: 26px;
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--pc-ink);
   margin: 0;
-  font-family: 'DM Sans', sans-serif;
 }
 
 /* Loading skeleton */
@@ -64,8 +69,8 @@ html[data-shell="catalog-app"] .profile-page-overlay {
 }
 
 .profile-page-skeleton {
-  background: rgba(255,255,255,0.06);
-  border-radius: 8px;
+  background: var(--pc-rule);
+  border-radius: 2px;
   animation: profile-pulse 1.4s ease-in-out infinite;
 }
 
@@ -93,15 +98,15 @@ html[data-shell="catalog-app"] .profile-page-overlay {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 32px;
+  gap: 12px;
+  margin-bottom: 30px;
 }
 
 .profile-page-avatar-ring {
   width: 88px;
   height: 88px;
   border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.15);
+  border: 1px solid var(--pc-rule);
   overflow: hidden;
   position: relative;
 }
@@ -144,15 +149,19 @@ html[data-shell="catalog-app"] .profile-page-overlay {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32px;
-  font-weight: 700;
-  color: #fff;
-  background: rgba(255,255,255,0.08);
+  font-family: var(--pc-serif);
+  font-size: 36px;
+  font-weight: 400;
+  color: var(--pc-ink);
+  background: var(--pc-rule);
 }
 
 .profile-page-avatar-hint {
-  font-size: 12px;
-  color: rgba(255,255,255,0.4);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--pc-ink-soft);
 }
 
 /* Body content */
@@ -161,73 +170,80 @@ html[data-shell="catalog-app"] .profile-page-overlay {
   flex-direction: column;
 }
 
-/* Section */
+/* Section — each opens under a hairline with a serif title. */
 .profile-page-section {
-  margin-bottom: 28px;
+  padding-top: 24px;
+  margin-bottom: 30px;
+  border-top: 1px solid var(--pc-rule);
 }
 
 .profile-page-section-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #fff;
-  margin: 0 0 4px;
+  font-family: var(--pc-serif);
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.15;
   letter-spacing: -0.01em;
+  color: var(--pc-ink);
+  margin: 0 0 6px;
 }
 
 .profile-page-section-desc {
-  font-size: 13px;
-  color: rgba(255,255,255,0.45);
-  margin: 0 0 16px;
-  line-height: 1.4;
+  font-size: 13.5px;
+  color: var(--pc-ink-soft);
+  margin: 0 0 18px;
+  line-height: 1.5;
 }
+.profile-page-section-title + .profile-page-field,
+.profile-page-section-title + .profile-page-field-row { margin-top: 18px; }
 
 /* Field */
 .profile-page-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 16px;
+  gap: 2px;
+  margin-bottom: 20px;
 }
 
 .profile-page-field-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: rgba(255,255,255,0.5);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  color: var(--pc-ink-soft);
 }
 
 .profile-page-field-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  gap: 20px;
 }
 
-/* Inputs */
+/* Inputs — an ink underline, nothing else. */
 .profile-page-input,
 .profile-page-select {
   width: 100%;
-  padding: 10px 12px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 10px;
-  color: #fff;
-  font-size: 15px;
+  padding: 10px 0;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--pc-rule);
+  border-radius: 0;
+  color: var(--pc-ink);
+  font-size: 16px;
   font-family: inherit;
   outline: none;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color 0.15s;
   -webkit-appearance: none;
   appearance: none;
 }
 
 .profile-page-input::placeholder {
-  color: rgba(255,255,255,0.25);
+  color: var(--pc-ink-soft);
+  opacity: 0.6;
 }
 
 .profile-page-input:focus,
 .profile-page-select:focus {
-  border-color: rgba(255,255,255,0.25);
-  background: rgba(255,255,255,0.08);
+  border-bottom-color: var(--pc-ink);
 }
 
 .profile-page-input:disabled,
@@ -236,20 +252,20 @@ html[data-shell="catalog-app"] .profile-page-overlay {
 }
 
 .profile-page-select {
-  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23999' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23999' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 12px center;
-  padding-right: 32px;
+  background-position: right 2px center;
+  padding-right: 24px;
+  cursor: pointer;
 }
+.profile-page-select option { color: #111; background: #fff; }
 
 /* Read-only field (email) */
 .profile-page-readonly {
-  padding: 10px 12px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 10px;
-  color: rgba(255,255,255,0.5);
-  font-size: 15px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--pc-rule);
+  color: var(--pc-ink-soft);
+  font-size: 16px;
 }
 
 /* Social handle inputs (@ prefix + bare-username field) */
@@ -257,65 +273,55 @@ html[data-shell="catalog-app"] .profile-page-overlay {
   display: flex;
   align-items: center;
   gap: 2px;
-  padding-left: 12px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 10px;
+  border-bottom: 1px solid var(--pc-rule);
+  transition: border-color 0.15s;
 }
 .profile-page-handle-input:focus-within {
-  border-color: rgba(255,255,255,0.22);
-  background: rgba(255,255,255,0.05);
+  border-bottom-color: var(--pc-ink);
 }
 .profile-page-handle-at {
-  color: rgba(255,255,255,0.4);
-  font-size: 15px;
+  color: var(--pc-ink-soft);
+  font-size: 16px;
   line-height: 1;
 }
 .profile-page-input-handle {
   flex: 1;
   min-width: 0;
   padding-left: 2px;
-  background: transparent !important;
   border: none !important;
-}
-.profile-page-input-handle:focus {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
 }
 
-/* Segmented control (gender) */
+/* Segmented control (gender) — a row of eyebrow options on one hairline;
+   the chosen one is underlined in ink, like a tab. */
 .profile-page-segmented {
   display: flex;
-  gap: 0;
-  background: rgba(255,255,255,0.06);
-  border-radius: 10px;
-  padding: 3px;
-  border: 1px solid rgba(255,255,255,0.08);
+  gap: 24px;
+  border-bottom: 1px solid var(--pc-rule);
 }
 
 .profile-page-seg-btn {
-  flex: 1;
-  padding: 8px 0;
+  padding: 12px 0 11px;
+  margin-bottom: -1px;
   border: none;
+  border-bottom: 1px solid transparent;
   background: transparent;
-  color: rgba(255,255,255,0.45);
-  font-size: 13px;
-  font-weight: 600;
+  color: var(--pc-ink-soft);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
   font-family: inherit;
   cursor: pointer;
-  border-radius: 8px;
-  transition: all 0.2s;
+  transition: color 0.18s, border-color 0.18s;
 }
 
 .profile-page-seg-btn:hover:not(:disabled) {
-  color: rgba(255,255,255,0.7);
+  color: var(--pc-ink);
 }
 
 .profile-page-seg-btn.is-active {
-  background: rgba(255,255,255,0.12);
-  color: #fff;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  color: var(--pc-ink);
+  border-bottom-color: var(--pc-ink);
 }
 
 .profile-page-seg-btn:disabled {
@@ -325,10 +331,9 @@ html[data-shell="catalog-app"] .profile-page-overlay {
 
 /* Error */
 .profile-page-error {
-  padding: 10px 14px;
-  background: rgba(220,38,38,0.1);
-  border: 1px solid rgba(220,38,38,0.25);
-  border-radius: 10px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(220, 38, 38, 0.4);
+  border-bottom: 1px solid rgba(220, 38, 38, 0.4);
   color: #fca5a5;
   font-size: 13px;
   margin-bottom: 16px;
@@ -337,43 +342,51 @@ html[data-shell="catalog-app"] .profile-page-overlay {
 /* Actions */
 .profile-page-actions {
   margin-top: 4px;
-  margin-bottom: 16px;
+  margin-bottom: 24px;
 }
 
-.profile-page-save {
+/* Outlined ink button — the same action as Follow on the creator page. */
+.profile-page-save,
+.profile-page-creator-btn {
   width: 100%;
-  padding: 12px;
-  border: none;
-  border-radius: 12px;
-  background: #fff;
-  color: #0a0a0a;
-  font-size: 15px;
-  font-weight: 600;
+  padding: 14px;
+  border: 1px solid var(--pc-ink);
+  border-radius: 0;
+  background: none;
+  color: var(--pc-ink);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
   font-family: inherit;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
 }
 
-.profile-page-save:hover:not(:disabled) {
-  background: #e5e5e5;
+.profile-page-save:hover:not(:disabled),
+.profile-page-creator-btn:hover:not(:disabled) {
+  background: var(--pc-ink);
+  color: var(--bg);
 }
 
-.profile-page-save:disabled {
-  opacity: 0.35;
+.profile-page-save:disabled,
+.profile-page-creator-btn:disabled {
+  border-color: var(--pc-rule);
+  color: var(--pc-ink-soft);
   cursor: default;
 }
 
 .profile-page-save.is-saved {
-  background: #22c55e;
-  color: #fff;
-  opacity: 1;
+  border-color: var(--pc-ink);
+  background: var(--pc-ink);
+  color: var(--bg);
 }
 
-/* Footer */
+/* Footer — quiet text links. */
 .profile-page-footer {
   display: flex;
   flex-direction: column;
@@ -382,44 +395,34 @@ html[data-shell="catalog-app"] .profile-page-overlay {
   padding-top: 8px;
 }
 
-/* Legal links (Privacy · Terms) at the very bottom of the profile */
 .profile-page-legal {
   display: flex;
   align-items: center;
   gap: 10px;
 }
-.profile-page-legal-link {
-  background: none;
-  border: none;
-  color: rgba(255,255,255,0.4);
-  font-size: 12px;
-  font-family: inherit;
-  cursor: pointer;
-  padding: 4px 2px;
-  transition: color 0.15s;
-}
-.profile-page-legal-link:hover { color: rgba(255,255,255,0.7); }
-.profile-page-legal-dot { color: rgba(255,255,255,0.25); font-size: 12px; }
-
+.profile-page-legal-link,
 .profile-page-logout {
   background: none;
   border: none;
-  color: rgba(255,255,255,0.4);
-  font-size: 13px;
+  color: var(--pc-ink-soft);
   font-family: inherit;
   cursor: pointer;
-  padding: 8px 16px;
-  border-radius: 8px;
-  transition: color 0.15s;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
 }
-.profile-page-logout:hover {
-  color: rgba(255,255,255,0.7);
-}
+.profile-page-legal-link { font-size: 12px; padding: 4px 2px; }
+.profile-page-logout { font-size: 13.5px; font-weight: 500; padding: 8px 12px; }
+.profile-page-legal-link:hover,
+.profile-page-logout:hover { color: var(--pc-ink); text-decoration-color: var(--pc-ink-soft); }
+.profile-page-legal-dot { color: var(--pc-ink-soft); font-size: 12px; opacity: 0.6; }
 
 /* Mobile adjustments */
 @media (max-width: 480px) {
   /* Goal: the plain profile still fits one mobile viewport — header → avatar →
-     About → Body → Save → Logout all land on screen with no scroll, via
+     About → Body → Save → Done all land on screen with no scroll, via
      min-height + the body's space-between below. dvh (not vh) so the iOS URL
      bar collapsing doesn't shift it.
 
@@ -446,95 +449,76 @@ html[data-shell="catalog-app"] .profile-page-overlay {
     min-height: 0;
     justify-content: space-between;
   }
-  .profile-page-avatar-section { margin-bottom: 8px; }
+  .profile-page-avatar-section { margin-bottom: 12px; gap: 8px; }
   .profile-page-avatar-ring {
     width: 64px;
     height: 64px;
   }
-  .profile-page-avatar-hint { font-size: 11px; }
-  .profile-page-section { margin-bottom: 12px; }
-  .profile-page-section-title { margin-bottom: 6px; }
+  .profile-page-section { padding-top: 14px; margin-bottom: 14px; }
+  .profile-page-section-title { font-size: 20px; margin-bottom: 4px; }
+  .profile-page-section-title + .profile-page-field,
+  .profile-page-section-title + .profile-page-field-row { margin-top: 10px; }
   /* Descriptions are nice-to-have copy — drop them on mobile to buy
      the vertical room that keeps the page to one screen. */
   .profile-page-section-desc { display: none; }
-  .profile-page-field { margin-bottom: 10px; }
+  .profile-page-field { margin-bottom: 12px; }
   .profile-page-field:last-child { margin-bottom: 0; }
   .profile-page-field-row {
     grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
+    gap: 12px;
   }
   .profile-page-input,
-  .profile-page-select { padding: 8px 12px; }
-  .profile-page-actions { margin-top: 8px; }
+  .profile-page-select,
+  .profile-page-readonly { padding: 8px 0; }
+  .profile-page-segmented { gap: 18px; }
+  .profile-page-seg-btn { padding: 10px 0 9px; }
+  .profile-page-actions { margin-top: 8px; margin-bottom: 12px; }
   .profile-page-footer { margin-top: 8px; }
 }
 
 /* Account / Saved tab switcher — surfaces the shared SavedScreen inside
-   the profile overlay (My Account). */
+   the profile overlay (My Account). Section eyebrows on a hairline. */
 .profile-page-tabs {
   display: flex;
-  gap: 6px;
-  padding: 0 20px 8px;
+  gap: 28px;
+  padding: 0;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--pc-rule);
 }
-/* Dark by default, like every other control on this screen — these were written
-   light-mode-first while the tab bar was never rendered, so on the dark profile
-   the labels came out near-invisible. Mirrors .profile-page-seg-btn. */
 .profile-page-tab {
-  flex: 1;
-  padding: 9px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 12px 2px 11px;
+  margin-bottom: -1px;
+  border: none;
+  border-bottom: 1px solid transparent;
   background: transparent;
-  color: rgba(255, 255, 255, 0.55);
-  font-size: 13px;
-  font-weight: 600;
+  color: var(--pc-ink-soft);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
   font-family: inherit;
   cursor: pointer;
-  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+  transition: color 140ms ease, border-color 140ms ease;
 }
-.profile-page-tab:hover { color: rgba(255, 255, 255, 0.8); }
+.profile-page-tab:hover { color: var(--pc-ink); }
 .profile-page-tab.is-active {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.24);
+  color: var(--pc-ink);
+  border-bottom-color: var(--pc-ink);
 }
-.profile-page-saved { padding: 4px 16px 24px; }
-
-.light-mode .profile-page-tab { border-color: rgba(0,0,0,0.1); color: rgba(0,0,0,0.6); }
+.profile-page-saved { padding: 4px 0 24px; }
 
 /* ── Become-a-creator section ────────────────────────────────────── */
-.profile-page-creator-btn {
-  width: 100%;
-  padding: 12px;
-  border: none;
-  border-radius: 12px;
-  background: #fff;
-  color: #0a0a0a;
-  font-size: 15px;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-  transition: all 0.2s;
-  margin-top: 4px;
-}
-.profile-page-creator-btn:hover:not(:disabled) { background: #e5e5e5; }
-.profile-page-creator-btn:disabled { opacity: 0.35; cursor: default; }
+.profile-page-creator-btn { margin-top: 4px; }
 .profile-page-creator-status {
   margin: 4px 0 0;
-  padding: 12px 14px;
-  border-radius: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--pc-rule);
+  border-bottom: 1px solid var(--pc-rule);
   font-size: 14px;
   line-height: 1.5;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--pc-ink);
 }
-.profile-page-creator-status--approved {
-  background: rgba(34, 197, 94, 0.12);
-  border-color: rgba(34, 197, 94, 0.35);
-  color: #86efac;
-}
-.profile-page-creator-status--denied { color: rgba(255, 255, 255, 0.6); }
+.profile-page-creator-status--denied { color: var(--pc-ink-soft); }
 
 /* ============================================
    LEGAL PAGE - Privacy Policy / Terms of Service
