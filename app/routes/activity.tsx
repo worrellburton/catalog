@@ -337,7 +337,7 @@ export default function ActivityRoute() {
           <section className="ap-section">
             <div className="ap-section-head">
               <h2 className="ap-section-title">Your reach</h2>
-              <span className="ap-section-sub">All time · last 7 days in green</span>
+              <span className="ap-section-sub">All time · last 7 days beneath</span>
             </div>
             <div className="ap-stat-grid">
               <StatTile label="Impressions"
