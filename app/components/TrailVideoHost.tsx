@@ -756,6 +756,13 @@ export function useTrailPrewarm(id: string | undefined, src: string | undefined,
 export function useTrailVideo(id: string | undefined, src: string | undefined, poster?: string) {
   const mgr = useContext(TrailVideoContext);
   const cleanupRef = useRef<(() => void) | null>(null);
+  // The poster only matters at attach time (it becomes the <video poster>
+  // for first paint). Read it through a ref so a poster change never
+  // changes the callback identity — React would otherwise run the old
+  // ref (detaching a PLAYING hero back into its feed card) and the new
+  // one (re-attaching it) on the very next commit.
+  const posterRef = useRef(poster);
+  posterRef.current = poster;
   return useCallback((node: HTMLElement | null) => {
     // Tear down any prior attachment when the ref changes or node detaches.
     if (cleanupRef.current) {
@@ -763,6 +770,6 @@ export function useTrailVideo(id: string | undefined, src: string | undefined, p
       cleanupRef.current = null;
     }
     if (!mgr || !node || !id || !src) return;
-    cleanupRef.current = mgr.attach(id, src, node, poster);
-  }, [mgr, id, src, poster]);
+    cleanupRef.current = mgr.attach(id, src, node, posterRef.current);
+  }, [mgr, id, src]);
 }

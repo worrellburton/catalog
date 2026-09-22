@@ -372,7 +372,8 @@ class VideoPlaybackDirector {
               this.nearIds.delete(id);
               const entry = this.cards.get(id);
               if (entry?.videoEl) {
-                this.releaseVideoEl(id, entry.videoEl);
+                // Leaving the 200% near band: far off-screen, no freeze.
+                this.releaseVideoEl(id, entry.videoEl, false);
                 entry.videoEl = null;
                 entry.status = 'idle';
                 this.emit(id, 'idle');
@@ -1156,7 +1157,9 @@ class VideoPlaybackDirector {
         continue;
       }
       if (distance >= releaseMargin || !this.inActiveScope(id)) {
-        this.releaseVideoEl(id, entry.videoEl);
+        // Freeze only when the card is on screen (out-of-scope release under
+        // an overlay); a card past the release margin can't show the seam.
+        this.releaseVideoEl(id, entry.videoEl, distance === 0);
         entry.videoEl = null;
         entry.status = 'idle';
         this.emit(id, 'idle');
@@ -1241,7 +1244,7 @@ class VideoPlaybackDirector {
           }
         }
         if (!victim) continue; // nothing to evict — skip this card this pass
-        this.releaseVideoEl(victim.id, victim.entry.videoEl!);
+        this.releaseVideoEl(victim.id, victim.entry.videoEl!, victimDist === 0);
         victim.entry.videoEl = null;
         victim.entry.status = 'idle';
         this.emit(victim.id, 'idle');
@@ -1606,12 +1609,16 @@ class VideoPlaybackDirector {
     window.setTimeout(drop, FADE_MS + 80); // backstop if transitionend never fires
   }
 
-  private releaseVideoEl(cardId: string, el: HTMLVideoElement): void {
+  private releaseVideoEl(cardId: string, el: HTMLVideoElement, freeze = true): void {
     // Before the element leaves the slot, pin its current frame into the
     // card so the poster never flashes underneath (the frame-0 thumbnail
-    // "pop" on return from a look/product overlay).
+    // "pop" on return from a look/product overlay). Callers pass
+    // freeze=false when the card is OFF-SCREEN (scroll-driven release /
+    // far eviction): nobody can see the seam there, and the capture is a
+    // synchronous canvas draw + JPEG encode that used to run for every card
+    // leaving the band during a fast scroll.
     const entry = this.cards.get(cardId);
-    if (entry && entry.videoEl === el) this.freezeCard(entry, el);
+    if (freeze && entry && entry.videoEl === el) this.freezeCard(entry, el);
     try { el.pause(); } catch { /* ignore */ }
     this.assignedIds.delete(cardId);
     const slot = this.pool.find(p => p.el === el);

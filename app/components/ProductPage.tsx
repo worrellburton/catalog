@@ -32,7 +32,6 @@ import SizeMatchBadge from '~/components/SizeMatchBadge';
 import { director } from '~/services/video-playback-director';
 import { warmPosters, posterRendition } from '~/utils/poster-prefetch';
 import { recordOverlayScroll, consumeReturnScroll } from '~/utils/overlay-scroll-stash';
-import ParticleBackground from '~/components/ParticleBackground';
 import OverlayChrome from '~/components/OverlayChrome';
 import CatalogLogo from '~/components/CatalogLogo';
 import AdminContextPanel from '~/components/AdminContextPanel';
@@ -45,6 +44,7 @@ import {
   prefetchVideoBytes,
   isMobileViewport,
   markFeedMilestone,
+  takeTapPoster,
 } from '~/services/video-loading';
 import { useVideoPipelineMode } from '~/hooks/useVideoPipeline';
 import { lookPoster, productPoster } from '~/services/media-resolver';
@@ -1164,18 +1164,13 @@ export default function ProductPage({
   const [heroHiResLoaded, setHeroHiResLoaded] = useState(false);
 
   // Tap-handoff poster: when a CreativeCardV2 tile navigates here, it stashes
-  // a canvas snapshot of the playing card frame on window.__feedTapPosters.
+  // a canvas snapshot of the playing card frame via stashTapPoster.
   // We pick it up synchronously so the hero can paint that exact frame
   // BEFORE the trail-host has had a chance to swap in the live element.
   // Cleared after read so the next tap doesn't reuse a stale snapshot.
-  const tapHandoffPoster = (() => {
-    if (typeof window === 'undefined') return '';
-    if (!effectiveCreative?.id) return '';
-    const w = window as Window & { __feedTapPosters?: Record<string, string> };
-    const url = w.__feedTapPosters?.[effectiveCreative.id];
-    if (url && w.__feedTapPosters) delete w.__feedTapPosters[effectiveCreative.id];
-    return url || '';
-  })();
+  // Taken ONCE (lazy initializer) so the value is stable for the page's
+  // life — see LookOverlay for why a per-render read re-attached the hero.
+  const [tapHandoffPoster] = useState(() => takeTapPoster(effectiveCreative?.id));
   // Poster fallback chain — the primary image (creative.thumbnailUrl is
   // sourced from products.primary_image_url for product-feed tiles) is
   // the canonical first frame. When that's missing (or the trail-tap
@@ -1308,14 +1303,6 @@ export default function ProductPage({
       role="dialog"
       aria-modal="true"
     >
-      {/* Ambient particle field over the opaque black base — same live
-          background treatment as the look overlay. Sits behind the
-          scroll content. */}
-      {/* Desktop only — see LookOverlay: spares mobile a scarce WebGL context
-          + GPU draw; opaque base reads fine and A1 already pauses it over the feed. */}
-      <div className="product-page-particles" aria-hidden="true">
-        {!isMobileViewport() && <ParticleBackground />}
-      </div>
       {/* Loading state shaped like the page itself — a hero skeleton beside
           the info skeleton (product card, copy lines, action buttons), mirroring
           .pd-split (stacked on mobile, hero-left/info-right on desktop). Reads as

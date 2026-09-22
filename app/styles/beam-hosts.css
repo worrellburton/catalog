@@ -137,3 +137,31 @@ html [data-beam][data-paused] [data-beam-bloom] {
    (border/background/radius of its own) before a beam belongs on it. Check the
    CSS, don't go by how the screen looks — several "cards" in this app are
    bare layout divs whose children carry the visible chrome. */
+
+/* ── PARKED BARS ──────────────────────────────────────────────────────
+   The rule above keeps the beam running even when the package thinks the
+   host is off-screen. That's right while the bar is visible — but the home
+   search pill slides off-screen once the shopper scrolls past the hero
+   (.hero-scrolled) or hides on scroll-down (.chrome-hidden), and the desktop
+   bar leaves while an overlay is open. An invisible beam is still a
+   per-frame conic-gradient repaint plus a blur + hue-rotate filter
+   animation under the whole feed scroll. Freeze it in those states; these
+   selectors out-rank the `html [data-beam][data-paused]` override. */
+.app-root.home-hero.hero-scrolled .bottom-bar [data-beam],
+.app-root.home-hero.hero-scrolled .bottom-bar [data-beam]::before,
+.app-root.home-hero.hero-scrolled .bottom-bar [data-beam]::after,
+.app-root.home-hero.hero-scrolled .bottom-bar [data-beam] [data-beam-bloom],
+.app-root.chrome-hidden .bottom-bar [data-beam],
+.app-root.chrome-hidden .bottom-bar [data-beam]::before,
+.app-root.chrome-hidden .bottom-bar [data-beam]::after,
+.app-root.chrome-hidden .bottom-bar [data-beam] [data-beam-bloom],
+html:has(.app-root.chrome-hidden) .ai-bar-wrap [data-beam],
+html:has(.app-root.chrome-hidden) .ai-bar-wrap [data-beam]::before,
+html:has(.app-root.chrome-hidden) .ai-bar-wrap [data-beam]::after,
+html:has(.app-root.chrome-hidden) .ai-bar-wrap [data-beam] [data-beam-bloom],
+html:has(.app-root.has-overlay) .ai-bar-wrap [data-beam],
+html:has(.app-root.has-overlay) .ai-bar-wrap [data-beam]::before,
+html:has(.app-root.has-overlay) .ai-bar-wrap [data-beam]::after,
+html:has(.app-root.has-overlay) .ai-bar-wrap [data-beam] [data-beam-bloom] {
+  animation-play-state: paused !important;
+}

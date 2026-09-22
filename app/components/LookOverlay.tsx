@@ -17,7 +17,6 @@ import { useActiveGenderFilter } from '~/hooks/useActiveGenderFilter';
 import { useTrailVideo, useTrailVideoManager } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import ProductMiniMedia from './ProductMiniMedia';
-import ParticleBackground from './ParticleBackground';
 import OverlayChrome from './OverlayChrome';
 import CatalogLogo from '~/components/CatalogLogo';
 import AdminContextPanel from '~/components/AdminContextPanel';
@@ -31,6 +30,7 @@ import {
   prefetchVideoBytes,
   isMobileViewport,
   isSlowConnection,
+  takeTapPoster,
 } from '~/services/video-loading';
 import { useVideoPipelineMode } from '~/hooks/useVideoPipeline';
 import { useAuth } from '~/hooks/useAuth';
@@ -312,19 +312,15 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   const activeHlsUrl = pipelineMode === 'hls' ? look.hls_url : undefined;
   const heroVideoUrl = activeHlsUrl || (wantMobile && look.mobile_video_url ? look.mobile_video_url : fullVideoUrl);
 
-  // Tap-handoff poster: LookCard captured the playing frame via
-  // captureVideoFrame() and stashed a JPEG data URL on
-  // window.__feedTapPosters[trailId] right before navigation. Read it
-  // synchronously on mount so the hero paints that exact frame BEFORE
-  // the trail-host has a chance to swap in the live <video> element.
-  // Cleared after read so the next tap doesn't reuse a stale snapshot.
-  const tapHandoffPoster = (() => {
-    if (typeof window === 'undefined') return '';
-    const w = window as Window & { __feedTapPosters?: Record<string, string> };
-    const url = w.__feedTapPosters?.[trailId];
-    if (url && w.__feedTapPosters) delete w.__feedTapPosters[trailId];
-    return url || '';
-  })();
+  // Tap-handoff poster: the feed card captured the playing frame via
+  // captureVideoFrame() and stashed it (stashTapPoster) right before
+  // navigation. Taken ONCE, in a lazy initializer, so the hero paints that
+  // exact frame on the first render AND the value stays stable for the
+  // overlay's life. Reading it per render used to return '' on render #2,
+  // which swapped the poster src and changed the trail attach callback —
+  // React then moved the playing hero <video> back to the card and into
+  // the hero again one frame after open, and mounted the cold skeleton.
+  const [tapHandoffPoster] = useState(() => takeTapPoster(trailId));
   // Canonical look poster (services/media-resolver) — same chain the feed card
   // uses, AND the same rendition (width/quality/resize), so this URL is the
   // one the feed already pulled into cache: the hero paints it from memory
@@ -946,17 +942,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       ref={overlayRef}
       className={`look-overlay${mounted && !isAnimatingOut ? ' look-overlay--in' : ''}${isAnimatingOut ? ' look-overlay--out' : ''}`}
     >
-      {/* Ambient particle field on top of the opaque black base — makes
-          the page background a live, dynamic surface instead of a flat
-          solid. Sits behind all scroll content (z-index 0). */}
-      {/* Desktop only: on phones the ambient field is barely visible and a
-          second WebGL context competes for the ~16-context cap (evicting the
-          app-root singleton) and GPU. The opaque black base reads fine without
-          it. A1 already stops this field drawing when opened over the feed
-          (paused), so this just spares mobile the context + any hero-opened draw. */}
-      <div className="look-overlay-particles" aria-hidden="true">
-        {!isMobileViewport() && <ParticleBackground />}
-      </div>
       {/* Cold-open architecture skeleton (media + info: meta, tab, product card,
           copy, actions), mirroring .look-hero-section. Only on cold/deep-link
           opens — warm feed opens morph the tapped frame in and skip this. */}

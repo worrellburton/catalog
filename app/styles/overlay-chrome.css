@@ -66,9 +66,10 @@
     display: inline-flex; align-items: center; justify-content: center;
     border-radius: 50%;
     border: 1px solid rgba(255, 255, 255, 0.18);
-    background: rgba(20, 20, 26, 0.7);
+    /* Solid, not frosted: this button rides over the playing hero video and
+       a backdrop-filter there re-blurs the video layer every frame. */
+    background: rgba(20, 20, 26, 0.82);
     color: #fff;
-    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
     cursor: pointer;
   }
   .ovl-chrome-logo {
