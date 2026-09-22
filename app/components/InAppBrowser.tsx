@@ -35,7 +35,8 @@ export default function InAppBrowser({ url, title, product, isSaved, onToggleSav
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
-    requestAnimationFrame(() => setMounted(true));
+    const raf = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(raf);
   }, []);
 
   // If the iframe doesn't fire 'load' within the budget, assume the
@@ -50,9 +51,12 @@ export default function InAppBrowser({ url, title, product, isSaved, onToggleSav
     return () => window.clearTimeout(t);
   }, [url, loaded]);
 
+  const closeTimerRef = useRef<number>(0);
+  useEffect(() => () => { window.clearTimeout(closeTimerRef.current); }, []);
   const handleClose = useCallback(() => {
     setIsAnimatingOut(true);
-    setTimeout(onClose, 320);
+    window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = window.setTimeout(onClose, 320);
   }, [onClose]);
 
   // Escape closes the overlay.

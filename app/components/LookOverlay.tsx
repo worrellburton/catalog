@@ -17,7 +17,6 @@ import { useActiveGenderFilter } from '~/hooks/useActiveGenderFilter';
 import { useTrailVideo, useTrailVideoManager } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import ProductMiniMedia from './ProductMiniMedia';
-import ParticleBackground from './ParticleBackground';
 import OverlayChrome from './OverlayChrome';
 import CatalogLogo from '~/components/CatalogLogo';
 import AdminContextPanel from '~/components/AdminContextPanel';
@@ -31,6 +30,7 @@ import {
   prefetchVideoBytes,
   isMobileViewport,
   isSlowConnection,
+  takeTapPoster,
 } from '~/services/video-loading';
 import { useVideoPipelineMode } from '~/hooks/useVideoPipeline';
 import { useAuth } from '~/hooks/useAuth';
@@ -107,6 +107,10 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // parent can pop the Catalog search bar exactly when the shopper reaches
   // the daily feed — and hide it again when they scroll back above.
   const dailyFeedSentinelRef = useRef<HTMLDivElement | null>(null);
+  // Rails (+ nested daily feed) mount one frame after the hero paints — see
+  // the effect near the byte-prewarm below. Declared up here because the
+  // daily-feed sentinel effect depends on it.
+  const [railsReady, setRailsReady] = useState(false);
   // Tracked separately so the nested feed re-binds its IntersectionObserver
   // root once the scroller mounts (refs alone don't trigger re-renders).
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
@@ -217,7 +221,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       if (raf) cancelAnimationFrame(raf);
       onDailyFeedBar(false, false);
     };
-  }, [scrollEl, onDailyFeedBar]);
+  }, [scrollEl, onDailyFeedBar, railsReady]); // railsReady: the sentinel mounts with the rails
 
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
   const [lookBookmarked, setLookBookmarked] = useState(bookmarks.isLookBookmarked(look.id));
@@ -312,19 +316,15 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   const activeHlsUrl = pipelineMode === 'hls' ? look.hls_url : undefined;
   const heroVideoUrl = activeHlsUrl || (wantMobile && look.mobile_video_url ? look.mobile_video_url : fullVideoUrl);
 
-  // Tap-handoff poster: LookCard captured the playing frame via
-  // captureVideoFrame() and stashed a JPEG data URL on
-  // window.__feedTapPosters[trailId] right before navigation. Read it
-  // synchronously on mount so the hero paints that exact frame BEFORE
-  // the trail-host has a chance to swap in the live <video> element.
-  // Cleared after read so the next tap doesn't reuse a stale snapshot.
-  const tapHandoffPoster = (() => {
-    if (typeof window === 'undefined') return '';
-    const w = window as Window & { __feedTapPosters?: Record<string, string> };
-    const url = w.__feedTapPosters?.[trailId];
-    if (url && w.__feedTapPosters) delete w.__feedTapPosters[trailId];
-    return url || '';
-  })();
+  // Tap-handoff poster: the feed card captured the playing frame via
+  // captureVideoFrame() and stashed it (stashTapPoster) right before
+  // navigation. Taken ONCE, in a lazy initializer, so the hero paints that
+  // exact frame on the first render AND the value stays stable for the
+  // overlay's life. Reading it per render used to return '' on render #2,
+  // which swapped the poster src and changed the trail attach callback —
+  // React then moved the playing hero <video> back to the card and into
+  // the hero again one frame after open, and mounted the cold skeleton.
+  const [tapHandoffPoster] = useState(() => takeTapPoster(trailId));
   // Canonical look poster (services/media-resolver) — same chain the feed card
   // uses, AND the same rendition (width/quality/resize), so this URL is the
   // one the feed already pulled into cache: the hero paints it from memory
@@ -370,9 +370,31 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     // prewarm (it would fetch an MP4 the hero won't play). In 'mp4' pipeline
     // mode activeHlsUrl is undefined, so the byte prewarm always runs.
     if (activeHlsUrl) return;
-    if (heroVideoUrl) prefetchVideoBytes(heroVideoUrl);
-    if (fullVideoUrl && fullVideoUrl !== heroVideoUrl) prefetchVideoBytes(fullVideoUrl);
+    // Deferred past the open: the hero's own <video> is already buffering,
+    // and two full-file GETs on the open frame contended with it (and the
+    // rail posters) for bandwidth and main-thread body draining.
+    const t = window.setTimeout(() => {
+      if (heroVideoUrl) prefetchVideoBytes(heroVideoUrl);
+      if (fullVideoUrl && fullVideoUrl !== heroVideoUrl) prefetchVideoBytes(fullVideoUrl);
+    }, 1200);
+    return () => window.clearTimeout(t);
   }, [heroVideoUrl, fullVideoUrl, activeHlsUrl]);
+
+  // The four rails + nested daily feed (~57 cards, each with an eager
+  // poster, two observers and half a dozen store subscriptions) used to
+  // mount synchronously in the open commit — all below the fold on a phone.
+  // Mount them one frame after the hero has painted so the open itself
+  // stays a single cheap commit.
+  useEffect(() => {
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setRailsReady(true));
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, []);
 
   // Pause background feed cards while the overlay is open so they don't
   // compete for bandwidth with the hero video. Resume on unmount.
@@ -381,7 +403,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     trailMgr?.suspendFeed(trailId);
     // Reclaim decoders held by the now-covered feed's parked clips.
     trailMgr?.pruneIdle();
-    return () => { trailMgr?.resumeFeed(); };
+    return () => { trailMgr?.resumeFeed(trailId); };
   }, [trailMgr, trailId]);
 
   // Resolves to the shopper's active gender preference ('all'|'men'|'women').
@@ -748,6 +770,16 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
 
   useEscapeKey(() => handleClose());
 
+  // Products in garment-role order, computed once per look (the regex role
+  // inference used to run inline in JSX on every render).
+  const sortedProducts = useMemo(() => sortByGarmentRole(look.products), [look.products]);
+
+  // Cleared on unmount: if the layer is torn down mid-slide (logo home reset,
+  // browser Back) the deferred onClose() must not fire against a parent
+  // callback that already popped this frame — that could pop history twice.
+  const closeTimerRef = useRef<number>(0);
+  useEffect(() => () => { window.clearTimeout(closeTimerRef.current); }, []);
+
   const handleClose = useCallback(() => {
     // Reverse handoff: pin the hero's exact frame onto the source card and
     // seek the card's element to match, so the grid resumes where the
@@ -759,7 +791,8 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     // on back. The pushScope effect's cleanup still pops the scope on unmount.
     director.beginScopeExit(directorScope);
     setIsAnimatingOut(true);
-    setTimeout(() => {
+    window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = window.setTimeout(() => {
       // Hand the WARM, still-playing hero element back to the director so the
       // source grid card resumes THAT element instantly (no cold re-acquire /
       // re-buffer — the brief "video stops on back" stutter). Done at the end of
@@ -946,17 +979,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       ref={overlayRef}
       className={`look-overlay${mounted && !isAnimatingOut ? ' look-overlay--in' : ''}${isAnimatingOut ? ' look-overlay--out' : ''}`}
     >
-      {/* Ambient particle field on top of the opaque black base — makes
-          the page background a live, dynamic surface instead of a flat
-          solid. Sits behind all scroll content (z-index 0). */}
-      {/* Desktop only: on phones the ambient field is barely visible and a
-          second WebGL context competes for the ~16-context cap (evicting the
-          app-root singleton) and GPU. The opaque black base reads fine without
-          it. A1 already stops this field drawing when opened over the feed
-          (paused), so this just spares mobile the context + any hero-opened draw. */}
-      <div className="look-overlay-particles" aria-hidden="true">
-        {!isMobileViewport() && <ParticleBackground />}
-      </div>
       {/* Cold-open architecture skeleton (media + info: meta, tab, product card,
           copy, actions), mirroring .look-hero-section. Only on cold/deep-link
           opens — warm feed opens morph the tapped frame in and skip this. */}
@@ -1218,7 +1240,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   {productsEnabled && shopperBody.heightCm && (
                     <SizeMatchSummary products={look.products} body={shopperBody} />
                   )}
-                  {productsEnabled && sortByGarmentRole(look.products).map((p, pi) => (
+                  {productsEnabled && sortedProducts.map((p, pi) => (
                     <div key={pi} className="product-card" onClick={() => handleProductClick(p)}>
                       <div className="product-card-thumb">
                         <ProductMiniMedia
@@ -1325,6 +1347,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
         {/* "Similar looks" section — admin-controllable via /admin/pages
             (page=looks, key=similar). Shows garment-matched looks, with a
             Popular fallback when nothing matches. */}
+        {railsReady && (<>
         {similarEnabled && feedSections.looksLikeThis.length > 0 && (
           <div className="look-feed-section">
             <h3 className="look-feed-heading">
@@ -1342,7 +1365,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               )}
             </h3>
             <div className="look-feed-grid">
-              {feedSections.looksLikeThis.slice(0, similarLimit).map((fl, i) => (
+              {feedSections.looksLikeThis.slice(0, similarLimit).map((fl) => (
                 <CreativeCardV2
                   key={`like-${fl.id}`}
                   slotId={`${directorScope}:like-${fl.id}`}
@@ -1350,7 +1373,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   className="look-card"
                   onOpenLook={handleFeedLookClick}
                   onOpenCreator={onOpenCreator}
-                  priority={i < 2}
                 />
               ))}
             </div>
@@ -1437,13 +1459,14 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
             layoutMode={0}
             onOpenLook={handleFeedLookClick}
             onOpenCreator={onOpenCreator}
-            onOpenBrowser={(url, title) => onOpenBrowser(url, title)}
+            onOpenBrowser={onOpenBrowser}
             onOpenProduct={onOpenProduct}
             onOpenCreative={onOpenCreative}
             onCreateCatalog={onCreateCatalog}
             bookmarks={bookmarks}
           />
         </div>
+        </>)}
       </div>
       {simDebug.open && (
         <SimilarDebugModal

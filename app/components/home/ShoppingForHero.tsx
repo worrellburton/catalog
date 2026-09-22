@@ -6,6 +6,7 @@
 import { useEffect, useRef, useMemo, useState } from 'react';
 import { getAutoEditorConfig } from '~/services/dials';
 import TypeAnywhere from '~/components/TypeAnywhere';
+import DropCountdown from '~/components/home/DropCountdown';
 import type { Product } from '~/data/looks';
 
 // Headline rotation. First HEADLINE_BASELINE_VISITS the user sees the
@@ -177,27 +178,14 @@ export default function ShoppingForHero({ onRevealFeed, recentProducts = [], onO
   // actually refreshes. Ticks every second; the interval is cleared on
   // unmount and the target is recomputed each tick (so it rolls to the next
   // day the instant it passes zero).
+  // The per-second tick lives in <DropCountdown> so only that span
+  // re-renders, not this whole hero.
   const [refreshHour, setRefreshHour] = useState(0);
-  const [nowTick, setNowTick] = useState(() => Date.now());
   useEffect(() => {
     let alive = true;
     getAutoEditorConfig().then(c => { if (alive) setRefreshHour(c.refreshHour); }).catch(() => {});
     return () => { alive = false; };
   }, []);
-  useEffect(() => {
-    const t = setInterval(() => setNowTick(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  const dropCountdown = (() => {
-    const now = new Date(nowTick);
-    const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), refreshHour, 0, 0, 0));
-    if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
-    let s = Math.max(0, Math.floor((next.getTime() - now.getTime()) / 1000));
-    const hh = Math.floor(s / 3600); s -= hh * 3600;
-    const mm = Math.floor(s / 60); s -= mm * 60;
-    const p = (n: number) => String(n).padStart(2, '0');
-    return `${p(hh)}:${p(mm)}:${p(s)}`;
-  })();
   // Pick a headline for this visit. The first HEADLINE_BASELINE_VISITS the
   // user lands here they see the canonical "What are you shopping for?";
   // beyond that, we rotate through FUN_HEADLINES picked via the visit
@@ -360,10 +348,7 @@ export default function ShoppingForHero({ onRevealFeed, recentProducts = [], onO
             <line x1="12" y1="8" x2="12.01" y2="8" />
           </svg>
         </button>
-        <span className="sfh-scroll-sub" aria-label={`Your next feed drops in ${dropCountdown}`}>
-          Your next feed drops in{' '}
-          <span className="sfh-scroll-countdown">{dropCountdown}</span>
-        </span>
+        <DropCountdown refreshHour={refreshHour} />
         <button type="button" className="sfh-scroll-chev-btn" onClick={onRevealFeed} aria-label="Scroll to your feed">
           <svg className="sfh-scroll-chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="6 9 12 15 18 9" />

@@ -545,6 +545,30 @@ export function cancelAllHighResPreloads(): void {
 // The detail view picks it up as its initial poster, so the hero
 // shows the exact frame the user just clicked - no black flash.
 
+/** Widest a captured frame is ever encoded at (see captureVideoFrame). */
+const CAPTURE_MAX_WIDTH = 360;
+let captureCanvas: HTMLCanvasElement | null = null;
+
+/** Tap-handoff posters: a feed card stashes the frame it was showing when
+ *  tapped, keyed by the overlay's trail id; the overlay takes it ONCE on
+ *  mount as its initial hero poster. Module-level so the value survives the
+ *  navigation between card and overlay without threading through history. */
+const tapPosters = new Map<string, string>();
+
+export function stashTapPoster(id: string, dataUrl: string): void {
+  tapPosters.set(id, dataUrl);
+}
+
+/** Read-and-clear. Call from a lazy useState initializer so a re-render
+ *  never sees a different value (which would swap the hero poster and
+ *  re-attach the hero <video> one frame after open). */
+export function takeTapPoster(id: string | undefined): string {
+  if (!id) return '';
+  const url = tapPosters.get(id) ?? '';
+  if (url) tapPosters.delete(id);
+  return url;
+}
+
 /** Snapshot the current frame of a playing <video> as a JPEG data URL.
  *  Returns null if the video has no decoded frames yet (cold-start tap)
  *  or if canvas drawing fails (cross-origin without proper CORS, etc.). */
@@ -552,16 +576,24 @@ export function captureVideoFrame(video: HTMLVideoElement | null): string | null
   if (!video) return null;
   if (video.readyState < 2) return null; // no decoded frame to paint
   try {
-    const w = video.videoWidth || 480;
-    const h = video.videoHeight || 640;
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
+    // The capture is only ever a POSTER (painted under the hero while the
+    // real element re-attaches, or over a card while its element is away),
+    // so it never needs the clip's full resolution. Capping the width keeps
+    // the synchronous drawImage + JPEG encode — which lands on the tap and
+    // on the first frame of a close — to a few ms instead of 10–40ms for a
+    // 1080×1920 frame. One canvas is reused so we don't allocate per call.
+    const srcW = video.videoWidth || 480;
+    const srcH = video.videoHeight || 640;
+    const scale = Math.min(1, CAPTURE_MAX_WIDTH / srcW);
+    const w = Math.max(1, Math.round(srcW * scale));
+    const h = Math.max(1, Math.round(srcH * scale));
+    const canvas = captureCanvas ?? (captureCanvas = document.createElement('canvas'));
+    if (canvas.width !== w) canvas.width = w;
+    if (canvas.height !== h) canvas.height = h;
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
     ctx.drawImage(video, 0, 0, w, h);
-    // 0.7 quality keeps the data URL under ~80KB at 480x640, which is
-    // small enough to pass through history.state without bloat.
+    // 0.7 quality keeps the data URL well under ~40KB at 360px wide.
     return canvas.toDataURL('image/jpeg', 0.7);
   } catch {
     // Tainted canvas - we set crossOrigin="anonymous" on every <video>

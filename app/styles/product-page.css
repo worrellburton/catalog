@@ -173,24 +173,6 @@
   }
 }
 
-/* Live particle field over the overlay's opaque black base. The base
-   (.product-page-overlay) blocks the feed; this layer makes the
-   background dynamic. Content scroller above it is transparent so the
-   field shows through the gaps. */
-.product-page-particles {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 0.55;
-}
-.product-page-particles .pw-particles {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
 .product-page {
   width: 100%;
   height: 100%;
@@ -269,7 +251,14 @@
   transition: opacity 0.45s ease;
   pointer-events: none;
 }
-.pd-loading.is-done { opacity: 0; }
+/* Once done: fade, then leave rendering entirely (see .look-loading.is-done:
+   the shimmer animations otherwise tick invisibly for the page's whole life). */
+.pd-loading.is-done {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.45s ease, visibility 0s linear 0.45s;
+}
+.pd-loading.is-done *::after { animation: none; }
 
 /* Shared shimmer surface for every skeleton block. */
 .pd-skel-hero,
@@ -969,13 +958,11 @@
   background: #0a0a0a;
 }
 
-/* Playback-time sharpen for the product hero (and its handoff poster, so the
-   poster→video swap stays consistent). Counteracts the upscale-softness of the
-   ≤834px source clip filling the large hero — no new asset, no feed impact.
-   The pooled <video> is appended INTO .pd-hero-video-slot, so the filter on the
-   slot applies to it; the feed grid uses .card-video-slot and is untouched.
-   See --hero-video-enhance (base.css) for tuning / kill-switch. */
-.pd-hero-video-slot,
+/* Playback-time sharpen — POSTER ONLY. Was also on .pd-hero-video-slot (the
+   live <video>'s container): a CSS filter on a playing video forces a
+   per-frame filter pass and takes it off the hardware overlay path. The
+   static handoff poster is rasterised once, so it keeps the treatment.
+   See --hero-video-enhance (base.css). */
 .pd-hero-handoff-poster {
   filter: var(--hero-video-enhance);
 }
@@ -1364,7 +1351,7 @@
   transition: opacity 0.4s ease;
   pointer-events: none;
 }
-.pd-brand-tile.loaded::before { opacity: 0; }
+.pd-brand-tile.loaded::before { opacity: 0; animation: none; }
 
 @keyframes pdBrandTileShimmer {
   0%   { background-position: 100% 0; }
@@ -2242,3 +2229,18 @@
    this file carried a creator-names-only variant (#16) that fought the home
    feed's .chrome-hidden fade — that scoped rule is intentionally removed; the
    unified rule supersedes it. */
+
+/* Phones: solid fills instead of backdrop blur on the controls that sit over
+   the playing hero — see look-overlay.css for the rationale. */
+@media (max-width: 768px) {
+  .pd-back,
+  .pd-share-floating,
+  .pd-save-floating,
+  .pd-share-toast {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .pd-back,
+  .pd-share-floating,
+  .pd-save-floating { background: rgba(0, 0, 0, 0.6); }
+}

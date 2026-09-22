@@ -358,7 +358,7 @@ drag-dismiss. Verify the hero video renders (sim) and the toolbar collapse
 The admin panel is a Remix-based internal dashboard for managing the catalog platform — creators, looks, products, brands, campaigns, moderation, and platform settings.
 
 - Route folder: `app/routes/admin/`
-- Layout shell: `app/routes/admin.tsx`
+- Layout shell: `app/routes/admin/route.tsx`
 - Auth: password-gated (access code `admin` — update this section when auth is implemented)
 
 ## Key Routes
@@ -400,7 +400,12 @@ The admin panel is a Remix-based internal dashboard for managing the catalog pla
 
 ## Key Patterns
 
-- Shared layout (`admin.tsx`) wraps all admin routes with nav sidebar
+- Shared layout (`admin/route.tsx`) wraps all admin routes with nav sidebar
+- Sidebar nav data (pinned rows, the click-to-expand groups, and the cmd-K
+  search aliases) lives in `app/constants/admin-nav.ts`;
+  `app/components/admin/AdminSidebarNav.tsx` renders it as an accordion.
+  Add a new page to its group there — `scripts/check-routes.mjs` asserts
+  every nav/search target has a registered route
 - Tables use `SortableTable.tsx` component for sortable columns
 - `UserMenu.tsx` for admin profile/logout actions
 - Keep heavy data-fetching logic in loaders, not component bodies

@@ -335,7 +335,21 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator,
   // Drag-to-dismiss for the bottom sheet. The grab handle is also a button:
   // a tap closes; a downward drag past the threshold closes; a short drag
   // snaps back. dy is mirrored in a ref so pointerup reads the latest value.
-  const [dragOffset, setDragOffset] = useState(0);
+  // Drag offset is written straight to the sheet's style (no state): a
+  // setState per pointermove re-rendered the whole comment list + particles
+  // on every touch sample.
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const setDragOffset = (dy: number) => {
+    const el = sheetRef.current;
+    if (!el) return;
+    if (dy > 0) {
+      el.style.transform = `translateY(${dy}px)`;
+      el.style.transition = 'none';
+    } else {
+      el.style.transform = '';
+      el.style.transition = '';
+    }
+  };
   // Ease the sheet out before it unmounts: set `closing` (plays the slide-down
   // + backdrop fade), then call the real close once the animation finishes.
   const [closing, setClosing] = useState(false);
@@ -399,8 +413,8 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator,
     {/* Dim scrim behind the sheet — tap to dismiss (TikTok-style). */}
     <div className={`comments-drawer-backdrop${closing ? ' is-closing' : ''}`} onClick={requestClose} aria-hidden="true" />
     <div
+      ref={sheetRef}
       className={`comments-page comments-page--drawer${closing ? ' is-closing' : ''}`}
-      style={dragOffset ? { transform: `translateY(${dragOffset}px)`, transition: 'none' } : undefined}
       onTouchStart={onSheetTouchStart}
       onTouchMove={onSheetTouchMove}
       onTouchEnd={onSheetTouchEnd}

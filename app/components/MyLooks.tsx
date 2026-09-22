@@ -24,7 +24,7 @@ import { lookSlug } from '~/utils/slug';
 import AutoplayVideo from '~/components/AutoplayVideo';
 import { stableLookId } from '~/services/looks';
 import { lookTrailId } from '~/utils/trailIds';
-import { captureVideoFrame } from '~/services/video-loading';
+import { captureVideoFrame, stashTapPoster } from '~/services/video-loading';
 import Beam from '~/components/Beam';
 import '~/styles/my-looks.css';
 import '~/styles/creator-page.css';
@@ -1127,11 +1127,7 @@ export default function MyLooks({ onClose }: MyLooksProps) {
                 try {
                   const vid = document.querySelector(`[data-look-id="${l.id}"] video`) as HTMLVideoElement | null;
                   const frame = captureVideoFrame(vid);
-                  if (frame && typeof window !== 'undefined') {
-                    const w = window as Window & { __feedTapPosters?: Record<string, string> };
-                    w.__feedTapPosters = w.__feedTapPosters || {};
-                    w.__feedTapPosters[lookTrailId(stableLookId(l.id))] = frame;
-                  }
+                  if (frame) stashTapPoster(lookTrailId(stableLookId(l.id)), frame);
                 } catch { /* best-effort handoff */ }
                 navigate(`/?look=${l.id}`);
               }}>

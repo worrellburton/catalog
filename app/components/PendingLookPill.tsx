@@ -49,10 +49,20 @@ export default function PendingLookPill({ onOpen }: { onOpen: (generationId?: st
   // through the humorous status lines while a look is in flight.
   const [quipIdx, setQuipIdx] = useState(() => Math.floor(Math.random() * PENDING_QUIPS.length));
   useEffect(() => {
-    const onScroll = () => setAtTop(window.scrollY < 8);
-    onScroll();
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        setAtTop(window.scrollY < 8);
+      });
+    };
+    setAtTop(window.scrollY < 8);
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, []);
 
   useEffect(() => {

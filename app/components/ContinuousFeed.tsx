@@ -23,7 +23,6 @@ import { deleteLook as deleteLookService } from '~/services/manage-looks';
 import { useDeleteMode } from '~/hooks/useDeleteMode';
 import { getSeenKeys, partitionUnseen, type SeenKey } from '~/services/seen-feed';
 import { useSearch } from '~/hooks/useSearch';
-import { director } from '~/services/video-playback-director';
 import { useUserAffinity } from '~/hooks/useUserAffinity';
 import { getFeedRules } from '~/services/dials';
 import { composeRenderedCreatives } from '~/services/feed-compose';
@@ -309,14 +308,9 @@ function ContinuousFeed({
     trackImpression({ type: 'catalog', id: q, context: q.slice(0, 120) });
   }, [committedQuery]);
 
-  // ── Director scroll notifications ─────────────────────────────────────
-  // Keeps the playback director in sync with the page scroll position so
-  // it can re-rank and recover stalled cards after a fast flick.
-  useEffect(() => {
-    const onScroll = () => director.notifyScroll(window.scrollY);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+  // (The playback director registers its own window scroll listener in
+  // init(); a second one here ran markScroll twice per event — two timer
+  // resets and two velocity samples per scroll tick for nothing.)
 
   // ── Filtering uses committedQuery so grid doesn't change while typing ──
   // must never appear in the consumer feed, detail pages, or similar-look rows.
