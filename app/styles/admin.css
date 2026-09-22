@@ -188,19 +188,12 @@
 }
 .admin-nav-item.admin-nav-subitem { padding: 6px 10px; }
 
-/* "Recent" strip — the last few pages the admin visited, under the
-   pinned rows. Fed by the per-admin history (profiles.admin_nav_order). */
-.admin-nav-recent { margin-top: 4px; }
-.admin-nav-recent-label,
+/* Group name shown before a page label in nav-search results. */
 .admin-nav-item-prefix {
   font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-weight: 500;
   color: rgba(15, 23, 42, 0.4);
 }
-.admin-nav-recent-label { padding: 8px 14px 2px; }
-.admin-nav-item-prefix { text-transform: none; letter-spacing: 0; font-weight: 500; }
 
 .admin-dark .admin-nav-group-toggle { color: rgba(255, 255, 255, 0.5); }
 .admin-dark .admin-nav-group-toggle:hover {
@@ -213,7 +206,6 @@
   color: rgba(255, 255, 255, 0.75);
 }
 .admin-dark .admin-nav-group-items { border-left-color: rgba(255, 255, 255, 0.1); }
-.admin-dark .admin-nav-recent-label,
 .admin-dark .admin-nav-item-prefix { color: rgba(255, 255, 255, 0.35); }
 
 .admin-nav-empty {

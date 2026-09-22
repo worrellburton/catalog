@@ -14,18 +14,12 @@ import {
 interface AdminSidebarNavProps {
   /** Live text of the sidebar "Search pages…" box. */
   navSearch: string;
-  /** Most-recently-visited page paths, newest first (persisted per admin). */
-  recentOrder: string[];
   /** Set of group keys currently expanded. */
   openGroups: ReadonlySet<string>;
   onToggleGroup: (key: string) => void;
   /** Fired on any page link click so the mobile drawer can close. */
   onItemClick: () => void;
 }
-
-// constants
-/** How many recently-visited pages show in the "Recent" strip. */
-const RECENT_COUNT = 3;
 
 // helpers
 function NavIcon({ d, size = 16 }: { d: string; size?: number }) {
@@ -126,14 +120,13 @@ function NavGroupRow({
 
 // main logic
 /**
- * Sidebar nav for /admin: pinned rows, a short "Recent" strip, then one
- * click-to-expand accordion row per group. Typing in the nav search box
+ * Sidebar nav for /admin: pinned rows, then one click-to-expand accordion
+ * row per group. Typing in the nav search box
  * collapses everything into a single flat filtered list (with the group
  * name as a prefix) so a match never hides behind a closed group.
  */
 export default function AdminSidebarNav({
   navSearch,
-  recentOrder,
   openGroups,
   onToggleGroup,
   onItemClick,
@@ -152,19 +145,6 @@ export default function AdminSidebarNav({
       );
   }, [trimmed, searchActive]);
 
-  const recent = useMemo(() => {
-    const pinned = new Set(ADMIN_NAV_PINNED.map(p => p.to));
-    const byTo = new Map(adminNavItems.map(i => [i.to, i]));
-    const out: AdminNavItem[] = [];
-    for (const to of recentOrder) {
-      if (pinned.has(to)) continue;
-      const item = byTo.get(to);
-      if (item) out.push(item);
-      if (out.length >= RECENT_COUNT) break;
-    }
-    return out;
-  }, [recentOrder]);
-
   if (searchActive) {
     return (
       <nav className="admin-nav">
@@ -182,14 +162,6 @@ export default function AdminSidebarNav({
       {ADMIN_NAV_PINNED.map(item => (
         <NavItemLink key={item.to} item={item} onClick={onItemClick} />
       ))}
-      {recent.length > 0 && (
-        <div className="admin-nav-recent">
-          <div className="admin-nav-recent-label">Recent</div>
-          {recent.map(item => (
-            <NavItemLink key={item.to} item={item} onClick={onItemClick} />
-          ))}
-        </div>
-      )}
       <div className="admin-nav-groups">
         {ADMIN_NAV_GROUPS.map(group => (
           <NavGroupRow
