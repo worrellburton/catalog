@@ -995,9 +995,10 @@
   .card-save-btn:focus-visible,
   .card-save-btn.is-saved { opacity: 1; }
 }
-/* Touch: always visible once the card has painted (no hover to reveal it). */
+/* Touch: no save button on the feed cards — saving lives on the look /
+   product page. (It used to sit on every card once painted.) */
 @media (hover: none) {
-  .look-card.loaded .card-save-btn { opacity: 0.92; }
+  .look-card .card-save-btn { display: none; }
 }
 /* Keep clear of the admin delete button (same corner) when both render. */
 .look-card:has(.creative-delete-btn) .card-save-btn { top: 46px; }
