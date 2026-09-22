@@ -35,9 +35,10 @@
      This is perceptual sharpening, not real resolution; it makes the soft
      source read crisper without re-encoding.
 
-     Scoped to the hero slot containers, which are unique to the detail
-     views (.pd-hero-video-slot / .look-media-video) — the feed grid uses
-     .card-video-slot, so it never inherits this.
+     Applied to the STATIC handoff posters only (.pd-hero-handoff-poster /
+     .look-media-handoff-poster), never to the live <video>: a CSS filter on
+     a playing video forces a per-frame filter pass and takes it off the
+     hardware overlay path on every platform. The feed grid never sees it.
 
      TUNING / KILL-SWITCH: set --hero-video-enhance to `none` to disable
      entirely, or lower the contrast/saturate factors. If a low-end iPhone

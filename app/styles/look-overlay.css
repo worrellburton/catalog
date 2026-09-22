@@ -390,13 +390,13 @@
   display: block;
 }
 
-/* Playback-time sharpen for the look hero (and its handoff poster). Same
-   rationale as the product hero: counteract upscale-softness of the ≤834px
-   source clip in the full-screen hero — no new asset, no feed impact. The
-   pooled <video> is appended into .look-media-video; the feed grid uses
-   .card-video-slot and is untouched. Tuning/kill-switch: --hero-video-enhance
+/* Playback-time sharpen — POSTER ONLY. It used to sit on .look-media-video
+   too, i.e. on the live <video>: any CSS filter on a playing video takes it
+   off the hardware overlay path and re-renders every frame through the
+   filter (the SVG sharpen alone dropped iPhone to ~10fps; contrast/saturate
+   still cost a per-frame pass on every platform). The static handoff poster
+   is rasterised once, so it keeps the treatment. Tuning: --hero-video-enhance
    in base.css. */
-.look-media-video,
 .look-media-handoff-poster {
   filter: var(--hero-video-enhance);
 }
@@ -943,23 +943,6 @@
 }
 
 /* ── Scrollable wrapper (makes the whole overlay a scrollable page) ── */
-/* Live particle field layered on the opaque black overlay base. Sits
-   behind the scroll content so the page background reads as a dynamic
-   surface, not a flat solid. Low opacity so it stays ambient. */
-.look-overlay-particles {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 0.55;
-}
-.look-overlay-particles .pw-particles {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
 .look-overlay-scroll {
   position: relative;
   z-index: 1;
@@ -2031,7 +2014,16 @@ body:has(.look-overlay.look-overlay--in) {
   transition: opacity 0.45s ease;
   pointer-events: none;
 }
-.look-loading.is-done { opacity: 0; }
+/* Once done: fade, then drop out of rendering entirely. The shimmer ::after
+   animations below are paint-time (background-position) and were ticking at
+   opacity 0 for the overlay's whole life; visibility:hidden (delayed past the
+   fade) plus animation:none stops that. */
+.look-loading.is-done {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.45s ease, visibility 0s linear 0.45s;
+}
+.look-loading.is-done *::after { animation: none; }
 
 .look-skel-media,
 .look-skel-meta,
@@ -2112,3 +2104,21 @@ body:has(.look-overlay.look-overlay--in) {
    extra is wired here. Previously this file carried a .card-creator-tag-only
    variant (#16) that fought the home feed's .chrome-hidden fade — that scoped
    rule is intentionally removed; the unified rule supersedes it. */
+
+/* Phones: the hero controls sat on the playing video with backdrop-filter,
+   which re-samples and blurs the video layer beneath them every frame it
+   updates. Solid near-opaque fills read the same at 40px and cost nothing.
+   (Desktop keeps the frost — more GPU headroom, and the look is part of the
+   design there.) */
+@media (max-width: 768px) {
+  .look-back-btn,
+  .look-home,
+  .look-video-back-btn,
+  .look-video-bookmark-btn,
+  .look-video-close,
+  .look-video-share {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(0, 0, 0, 0.6);
+  }
+}

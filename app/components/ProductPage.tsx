@@ -32,7 +32,6 @@ import SizeMatchBadge from '~/components/SizeMatchBadge';
 import { director } from '~/services/video-playback-director';
 import { warmPosters, posterRendition } from '~/utils/poster-prefetch';
 import { recordOverlayScroll, consumeReturnScroll } from '~/utils/overlay-scroll-stash';
-import ParticleBackground from '~/components/ParticleBackground';
 import OverlayChrome from '~/components/OverlayChrome';
 import CatalogLogo from '~/components/CatalogLogo';
 import AdminContextPanel from '~/components/AdminContextPanel';
@@ -45,6 +44,7 @@ import {
   prefetchVideoBytes,
   isMobileViewport,
   markFeedMilestone,
+  takeTapPoster,
 } from '~/services/video-loading';
 import { useVideoPipelineMode } from '~/hooks/useVideoPipeline';
 import { lookPoster, productPoster } from '~/services/media-resolver';
@@ -233,17 +233,27 @@ function buildRetailerOffers(product: Product): RetailerOffer[] {
 function BrandStripTile({ creative, onOpen }: { creative: ProductAd; onOpen: (c: ProductAd) => void }) {
   const [loaded, setLoaded] = useState(false);
   const slotRef = useRef<HTMLDivElement | null>(null);
+  const tileRef = useRef<HTMLButtonElement | null>(null);
+  // Attach the pooled <video> only once the tile is near the viewport.
+  // The strip sits below the hero, so on open its six tiles used to start
+  // six decoders the shopper couldn't see yet — on top of the hero and the
+  // look tiles. RAIL_ATTACH_MARGIN still gives a head start before it scrolls in.
+  const nearViewport = useInViewport(tileRef, RAIL_ATTACH_MARGIN);
   // pickPosterUrl returns the thumbnail when present, falls back to
   // product image. Passed to the trail-video pool so the <video poster=>
   // attribute paints a real image during MP4 load.
   const tilePoster = pickPosterUrl(creative);
   const tileSrc = pickVideoUrl(creative) ?? creative.video_url ?? undefined;
   const setSlot = useTrailVideo(creative.id, tileSrc, tilePoster || undefined);
+  // Identity changes with nearViewport on purpose: React then runs the old
+  // callback with null (detach when leaving) and the new one with the node
+  // (attach when arriving).
   const setRef = useCallback((node: HTMLDivElement | null) => {
     slotRef.current = node;
-    setSlot(node);
-  }, [setSlot]);
+    setSlot(nearViewport ? node : null);
+  }, [setSlot, nearViewport]);
   useEffect(() => {
+    if (!nearViewport) return;
     const video = slotRef.current?.querySelector('video') as HTMLVideoElement | null;
     if (!video) return;
     if (video.readyState >= 2) { setLoaded(true); return; }
@@ -254,7 +264,7 @@ function BrandStripTile({ creative, onOpen }: { creative: ProductAd; onOpen: (c:
       clearTimeout(t);
       ['playing', 'canplay', 'loadeddata'].forEach(e => video.removeEventListener(e, handler));
     };
-  }, [creative.id]);
+  }, [creative.id, nearViewport]);
 
   const posterUrl = creative.thumbnail_url
     || creative.product?.image_url
@@ -265,6 +275,7 @@ function BrandStripTile({ creative, onOpen }: { creative: ProductAd; onOpen: (c:
   return (
     <button
       type="button"
+      ref={tileRef}
       className={`pd-brand-tile ${loaded ? 'loaded' : ''}`}
       onClick={() => { trackAdClick(creative.id); onOpen(creative); }}
       onMouseEnter={() => prefetchSimilarProducts(creative.product?.id || '', 18)}
@@ -288,20 +299,30 @@ function BrandStripTile({ creative, onOpen }: { creative: ProductAd; onOpen: (c:
   );
 }
 
+/** IntersectionObserver margin for attaching a rail tile's pooled <video>:
+ *  roughly half a screen ahead, so buffering starts before the tile scrolls
+ *  in without lighting up every below-the-fold tile on open. */
+const RAIL_ATTACH_MARGIN = '60% 0%';
+
 /** Look-creative tile for the "Featured in Looks" grid. Looks have video
  *  via the looks_creative join in services/looks.ts, mapped to look.video.
  *  Uses the TrailVideoHost shared pool — no per-tile <video> elements,
- *  no stagger timers, no intervals. Videos attach when scrolled into the
- *  pool's prep band (useInViewport default: 200% of viewport). */
+ *  no stagger timers, no intervals. Videos attach once the tile is near
+ *  the viewport (RAIL_ATTACH_MARGIN). */
 function LookTile({
   look,
   index,
   onOpen,
   onOpenCreator,
+  posterOnly = false,
 }: {
   look: Look;
   index: number;
   onOpen: (l: Look) => void;
+  /** Padded duplicate of a look already in the grid: shows the poster only
+   *  and never takes a pooled <video> (each duplicate used to decode its own
+   *  copy of the same clip). */
+  posterOnly?: boolean;
   /** Click on the creator chip jumps to that creator's catalog
    *  page instead of opening the look. Routed via the same
    *  handleOpenCreator wired through to ContinuousFeed elsewhere. */
@@ -310,6 +331,7 @@ function LookTile({
   const wrapRef = useRef<HTMLButtonElement | null>(null);
   const slotRef = useRef<HTMLDivElement | null>(null);
   const inViewport = useInViewport(wrapRef);
+  const nearViewport = useInViewport(wrapRef, RAIL_ATTACH_MARGIN);
   const trailId = lookTrailId(look.id);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -321,21 +343,21 @@ function LookTile({
   const fullResVideoUrl = normalizeLookVideoUrl(look.video, basePath);
   const tilePoster = lookPoster(look);
 
-  // Attach the shared TrailVideoHost <video> element immediately on mount —
-  // do NOT gate on inViewport. The TrailVideoHost pool is empty on a fresh
-  // product-page load (no feed warmup), so gating on IO means the video
-  // element isn't even created until the observer fires, adding 1–3 s of
-  // download time after the tile is visible. Attaching eagerly starts
-  // buffering (preload='auto') the moment the product page renders, so by
-  // the time the user sees the tile the video is already ready to play.
-  // Bandwidth cost: bounded by padLooks(_, 8) capped at 8 tiles; duplicate
-  // slots share the same URL so the browser deduplicates at HTTP cache level.
-  const setVideoSlot = useTrailVideo(trailId, videoUrl, tilePoster || undefined);
+  // Attach the shared TrailVideoHost <video> once the tile is NEAR the
+  // viewport (RAIL_ATTACH_MARGIN ≈ half a screen ahead), not on mount. Eager
+  // attach used to start eight decoders the moment the page opened — every
+  // one below the fold on a phone, competing with the hero for the iOS
+  // decoder ceiling. The margin still starts buffering (preload='auto')
+  // before the tile scrolls in. Padded duplicates never attach at all.
+  const setVideoSlot = useTrailVideo(trailId, posterOnly ? undefined : videoUrl, tilePoster || undefined);
 
+  // Identity changes with nearViewport on purpose: React then runs the old
+  // callback with null (detach when leaving) and the new one with the node
+  // (attach when arriving).
   const setSlot = useCallback((el: HTMLDivElement | null) => {
     slotRef.current = el;
-    setVideoSlot(el);
-  }, [setVideoSlot]);
+    setVideoSlot(nearViewport ? el : null);
+  }, [setVideoSlot, nearViewport]);
 
   // Once visible, warm the full-res clip for instant LookOverlay open.
   useEffect(() => {
@@ -527,12 +549,13 @@ export default function ProductPage({
   useEffect(() => {
     // Exempt the hero by its creative.id when present, otherwise pass a
     // sentinel so suspendFeed pauses everything.
-    trailMgr?.suspendFeed(creative?.id ?? '');
+    const heroId = creative?.id ?? '';
+    trailMgr?.suspendFeed(heroId);
     // The feed behind us is fully covered — reclaim the decoders its
     // parked clips are still holding instead of waiting out each one's
     // idle timer. Re-entering the feed re-attaches the visible cards.
     trailMgr?.pruneIdle();
-    return () => { trailMgr?.resumeFeed(); };
+    return () => { trailMgr?.resumeFeed(heroId); };
   }, [trailMgr, creative?.id]);
 
   // "Popular in" — curated catalogs this product auto-matched (by name+brand).
@@ -695,12 +718,15 @@ export default function ProductPage({
   // black boxes while the bytes arrive. Same rendition math as the cards,
   // so the warmed URL IS the cache entry the tile requests.
   useEffect(() => {
+    // popularFallback is the WHOLE home roster; only the first ymalLimit
+    // ever render here, so warming past that just queued hundreds of
+    // fetches on every open.
     warmPosters([
       ...moreLikeThis.map(c => posterRendition(pickPosterUrl(c))),
       ...(lookCreatives ?? []).map(l => posterRendition(lookPoster(l))),
-      ...(popularFallback ?? []).map(c => posterRendition(pickPosterUrl(c))),
+      ...(popularFallback ?? []).slice(0, ymalLimit).map(c => posterRendition(pickPosterUrl(c))),
     ]);
-  }, [moreLikeThis, lookCreatives, popularFallback]);
+  }, [moreLikeThis, lookCreatives, popularFallback, ymalLimit]);
 
   // Super-admin "why this rail?" debug. Lazily computes the full diagnostics
   // (gender gate, relative band, sparse widen, per-candidate distances) only
@@ -1004,6 +1030,11 @@ export default function ProductPage({
       : undefined);
   const heroHlsUrl = pipelineMode === 'hls' ? effectiveCreative?.hlsUrl : null;
 
+  // Cleared on unmount — see LookOverlay: a deferred onClose() after the
+  // layer is already gone could pop the nav stack twice.
+  const closeTimerRef = useRef<number>(0);
+  useEffect(() => () => { window.clearTimeout(closeTimerRef.current); }, []);
+
   const handleClose = useCallback(() => {
     // Reverse handoff — see LookOverlay.handleClose: the source card resumes
     // at the hero's exact frame instead of restarting.
@@ -1015,7 +1046,8 @@ export default function ProductPage({
     // playing when this page clears. The suspend effect still pops on unmount.
     director.beginScopeExit(directorScope);
     setIsAnimatingOut(true);
-    setTimeout(() => {
+    window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = window.setTimeout(() => {
       // Hand the WARM hero element back to the director (see LookOverlay) so the
       // source grid card resumes that exact element instantly — no cold
       // re-buffer / brief stop. release() makes TrailVideoHost forget it.
@@ -1164,18 +1196,13 @@ export default function ProductPage({
   const [heroHiResLoaded, setHeroHiResLoaded] = useState(false);
 
   // Tap-handoff poster: when a CreativeCardV2 tile navigates here, it stashes
-  // a canvas snapshot of the playing card frame on window.__feedTapPosters.
+  // a canvas snapshot of the playing card frame via stashTapPoster.
   // We pick it up synchronously so the hero can paint that exact frame
   // BEFORE the trail-host has had a chance to swap in the live element.
   // Cleared after read so the next tap doesn't reuse a stale snapshot.
-  const tapHandoffPoster = (() => {
-    if (typeof window === 'undefined') return '';
-    if (!effectiveCreative?.id) return '';
-    const w = window as Window & { __feedTapPosters?: Record<string, string> };
-    const url = w.__feedTapPosters?.[effectiveCreative.id];
-    if (url && w.__feedTapPosters) delete w.__feedTapPosters[effectiveCreative.id];
-    return url || '';
-  })();
+  // Taken ONCE (lazy initializer) so the value is stable for the page's
+  // life — see LookOverlay for why a per-render read re-attached the hero.
+  const [tapHandoffPoster] = useState(() => takeTapPoster(effectiveCreative?.id));
   // Poster fallback chain — the primary image (creative.thumbnailUrl is
   // sourced from products.primary_image_url for product-feed tiles) is
   // the canonical first frame. When that's missing (or the trail-tap
@@ -1210,51 +1237,6 @@ export default function ProductPage({
     heroHostRef.current = node;
     setHeroSlotBase(node);
   }, [setHeroSlotBase]);
-
-  // Phase 8 helper: kick off a high-res prefetch on hero mount in case
-  // the card-side preload (only fires on mobile) didn't run. Idempotent
-  // by URL so a second call here is free when the card already warmed
-  // the cache.
-  useEffect(() => {
-    // HLS streams its own segments via hls.js — skip the full-file byte prewarm.
-    if (heroHlsUrl) return;
-    if (creative?.videoUrl) prefetchVideoBytes(creative.videoUrl);
-  }, [creative?.id, creative?.videoUrl, heroHlsUrl]);
-
-  // Prewarm "Featured in Looks" poster images. Each look that's
-  // about to render a tile gets its poster jpeg pulled into the
-  // browser image cache while the user is still reading the hero.
-  // Posters are tiny (~30 KB) so the cost is negligible and the
-  // payoff is the rail painting instantly the moment it scrolls
-  // into view - same first-paint cadence as the product images
-  // around it.
-  //
-  // Phase 3: Range-bounded byte prefetch for staggered look tiles.
-  // Tiles 0-3 have renderReady=true and mount <video> elements immediately,
-  // so prefetching their bytes would create competing downloads for the same
-  // URL. Only prefetch tiles 4-11 which have a render delay (200-400 ms)
-  // giving us a head start before their <video> elements mount.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!lookCreatives || lookCreatives.length === 0) return;
-    const tiles = lookCreatives.slice(0, 12);
-    for (const l of tiles) {
-      const url = l.thumbnail_url;
-      if (!url) continue;
-      try {
-        const img = new Image();
-        img.decoding = 'async';
-        img.src = url;
-      } catch { /* ignore */ }
-    }
-    const mobile = isMobileViewport();
-    for (const l of tiles.slice(4, 12)) {
-      const videoUrl = (mobile && l.mobile_video_url) || l.video;
-      if (videoUrl && /^https?:\/\//i.test(videoUrl)) {
-        prefetchVideoBytes(videoUrl);
-      }
-    }
-  }, [lookCreatives]);
 
   // Size & fit spec sheet — computed up here (was an inline IIFE in the
   // JSX) so the "View more info" dropdown can both test it for emptiness
@@ -1308,14 +1290,6 @@ export default function ProductPage({
       role="dialog"
       aria-modal="true"
     >
-      {/* Ambient particle field over the opaque black base — same live
-          background treatment as the look overlay. Sits behind the
-          scroll content. */}
-      {/* Desktop only — see LookOverlay: spares mobile a scarce WebGL context
-          + GPU draw; opaque base reads fine and A1 already pauses it over the feed. */}
-      <div className="product-page-particles" aria-hidden="true">
-        {!isMobileViewport() && <ParticleBackground />}
-      </div>
       {/* Loading state shaped like the page itself — a hero skeleton beside
           the info skeleton (product card, copy lines, action buttons), mirroring
           .pd-split (stacked on mobile, hero-left/info-right on desktop). Reads as
@@ -1808,12 +1782,19 @@ export default function ProductPage({
           <section className="pd-look-feed">
             <h2 className="pd-feed-title">Featured in Looks</h2>
             <div className="pd-look-grid">
-              {/* padLooks gives duplicate slots a synthetic id so each
-                  LookTile gets a unique trailId → unique pool <video>.
-                  Same video URL, served from browser cache: zero extra
-                  network cost. */}
+              {/* padLooks gives duplicate slots a synthetic id so keys and
+                  trail ids stay unique; the duplicates render poster-only
+                  (no pooled <video>) so the grid never decodes the same
+                  clip twice. */}
               {padLooks(lookCreatives, 8).map((l, i) => (
-                <LookTile key={`fl-${l.id}-${i}`} look={l} index={i} onOpen={onOpenLook} onOpenCreator={onOpenCreator} />
+                <LookTile
+                  key={`fl-${l.id}-${i}`}
+                  look={l}
+                  index={i}
+                  onOpen={onOpenLook}
+                  onOpenCreator={onOpenCreator}
+                  posterOnly={i >= lookCreatives.length}
+                />
               ))}
             </div>
           </section>

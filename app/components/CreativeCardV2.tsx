@@ -32,6 +32,7 @@ import {
   pickPosterUrl,
   pickStillImageUrl,
   captureVideoFrame,
+  stashTapPoster,
   markFeedMilestone,
   prefetchVideoBytes,
   prefetchHlsHead,
@@ -334,15 +335,9 @@ const CreativeCardV2 = memo(function CreativeCardV2({
     if (isLook && look) {
       // Capture the playing frame so the overlay can paint it as an
       // instant poster behind its hero <video> slot (mirrors the
-      // legacy LookCard handoff via __feedTapPosters[trailId]).
+      // legacy LookCard handoff via stashTapPoster(trailId)).
       const frame = captureVideoFrame(director.getVideoElement(directorId));
-      if (frame) {
-        try {
-          const w = window as Window & { __feedTapPosters?: Record<string, string> };
-          w.__feedTapPosters = w.__feedTapPosters || {};
-          w.__feedTapPosters[lookTrailId(look.id)] = frame;
-        } catch { /* ignore */ }
-      }
+      if (frame) stashTapPoster(lookTrailId(look.id), frame);
       // Donate the director's playing element to TrailVideoHost so the
       // LookOverlay hero can reuse it without re-buffering. The element
       // keeps its currentTime and decoded state — no black flash or stall.
@@ -359,13 +354,7 @@ const CreativeCardV2 = memo(function CreativeCardV2({
     // Capture the playing frame for the detail-view hero handoff.
     // director.getVideoElement() returns the pooled element if assigned.
     const frame = captureVideoFrame(director.getVideoElement(directorId));
-    if (frame) {
-      try {
-        const w = window as Window & { __feedTapPosters?: Record<string, string> };
-        w.__feedTapPosters = w.__feedTapPosters || {};
-        w.__feedTapPosters[creative.id] = frame;
-      } catch { /* ignore */ }
-    }
+    if (frame) stashTapPoster(creative.id, frame);
     // Donate the director's playing element to TrailVideoHost so the
     // ProductPage hero can reuse it without re-buffering.
     const directorEl = director.stealVideoElement(directorId);

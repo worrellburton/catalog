@@ -22,6 +22,7 @@ import {
   captureVideoFrame,
   isMobileViewport,
   isSlowConnection,
+  stashTapPoster,
 } from '~/services/video-loading';
 
 // Per-session impression dedupe so a user scrolling past the same
@@ -318,11 +319,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
         try {
           const video = slotRef.current?.querySelector('video') as HTMLVideoElement | null;
           const frame = captureVideoFrame(video);
-          if (frame) {
-            const w = window as Window & { __feedTapPosters?: Record<string, string> };
-            w.__feedTapPosters = w.__feedTapPosters || {};
-            w.__feedTapPosters[trailId] = frame;
-          }
+          if (frame) stashTapPoster(trailId, frame);
         } catch { /* ignore — overlay falls back to thumbnail_url */ }
         onOpenLook(look);
       }}

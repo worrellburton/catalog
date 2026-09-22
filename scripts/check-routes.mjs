@@ -5,12 +5,13 @@
 // a blank page (this already bit /admin/daily-feed and /admin/sharing).
 //
 // Asserts every /admin/* target in the sidebar nav + command search (the
-// navItems / searchItems arrays in route.tsx) resolves to a registered route in
+// ADMIN_NAV_PINNED / ADMIN_NAV_GROUPS / ADMIN_SEARCH_ITEMS arrays in
+// app/constants/admin-nav.ts) resolves to a registered route in
 // vite.config.ts. Run in CI so the build fails instead of production.
 
 import { readFileSync } from 'node:fs';
 
-const routeTsx = readFileSync('app/routes/admin/route.tsx', 'utf8');
+const navTs = readFileSync('app/constants/admin-nav.ts', 'utf8');
 const vite = readFileSync('vite.config.ts', 'utf8');
 
 // Grab a `const <name> ... = [ ... ]` array literal by brace-matching the [].
@@ -31,7 +32,9 @@ function arrayBlock(src, declRe) {
 
 // Targets: only the nav + search arrays (NOT arbitrary `to:` like the recent-
 // items MRU list, which legitimately points at dynamic :param routes).
-const blocks = arrayBlock(routeTsx, /const navItems\b/) + arrayBlock(routeTsx, /const searchItems\b/);
+const blocks = arrayBlock(navTs, /const ADMIN_NAV_PINNED\b/)
+  + arrayBlock(navTs, /const ADMIN_NAV_GROUPS\b/)
+  + arrayBlock(navTs, /const ADMIN_SEARCH_ITEMS\b/);
 const targets = [...blocks.matchAll(/\bto:\s*['"`](\/admin[^'"`]*)['"`]/g)]
   .map(m => m[1].split('?')[0].replace(/\/+$/, ''))
   .filter(Boolean);

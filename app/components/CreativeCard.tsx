@@ -9,6 +9,7 @@ import {
   captureVideoFrame,
   markFeedMilestone,
   isMobileViewport,
+  stashTapPoster,
 } from '~/services/video-loading';
 import { useAuth } from '~/hooks/useAuth';
 import { useInViewport } from '~/hooks/useInViewport';
@@ -165,16 +166,8 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
     // between feed → detail. Stashed on history.state via the parent
     // navigation handler (onOpenProduct sees the carry below).
     const frame = captureVideoFrame(videoRef.current);
-    if (frame) {
-      try {
-        // Stash on the global so ProductPage / LookOverlay can read it
-        // synchronously on mount. Cleared once consumed. Plain object
-        // keyed by creative id so multiple in-flight taps don't clash.
-        const w = window as Window & { __feedTapPosters?: Record<string, string> };
-        w.__feedTapPosters = w.__feedTapPosters || {};
-        w.__feedTapPosters[creative.id] = frame;
-      } catch { /* ignore */ }
-    }
+    // Stash so ProductPage / LookOverlay can take it once on mount.
+    if (frame) stashTapPoster(creative.id, frame);
     if (onOpenProduct) {
       onOpenProduct(creative);
     } else if (creative.affiliate_url) {

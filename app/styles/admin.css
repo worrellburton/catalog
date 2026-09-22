@@ -93,58 +93,6 @@
   overflow-y: auto;
 }
 
-.admin-nav-section {
-  margin-bottom: 8px;
-}
-
-.admin-nav-section-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #aaa;
-  padding: 12px 14px 4px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.admin-nav-section-title:hover {
-  color: #777;
-}
-
-.admin-nav-section-chevron {
-  transition: transform 0.2s ease;
-  opacity: 0.5;
-}
-
-.admin-nav-section.collapsed .admin-nav-section-chevron {
-  transform: rotate(-90deg);
-}
-
-.admin-nav-section-items {
-  overflow: hidden;
-  max-height: 500px;
-  transition: max-height 0.25s ease;
-}
-
-.admin-nav-section.collapsed .admin-nav-section-items {
-  max-height: 0;
-}
-
-.admin-dark .admin-nav-section-title {
-  color: rgba(255, 255, 255, 0.3);
-}
-
-.admin-dark .admin-nav-section-title:hover {
-  color: rgba(255, 255, 255, 0.5);
-}
-
 /* Sidebar nav search — sits between the logo and the nav list. Visually
    the same matte search affordance as the topbar, but always visible so an
    admin can jump straight to any page without opening the topbar overlay. */
@@ -178,54 +126,95 @@
 .admin-light .admin-nav-search-input { color: #0f172a; }
 .admin-light .admin-nav-search-input::placeholder { color: rgba(15, 23, 42, 0.4); }
 
-/* "Other Pages" collapse — same row geometry as a nav item so the
-   sidebar stays visually rhythmic. Count chip on the right mirrors the
-   admin's "Showing X / Y" footers elsewhere in the app. */
-.admin-nav-other-toggle {
+/* Grouped sidebar — one click-to-expand row per group (see
+   app/constants/admin-nav.ts). The toggle shares a nav item's geometry so
+   the column stays rhythmic; expanded items indent under a hairline rail.
+   Count chip on the right mirrors the "Showing X / Y" footers elsewhere. */
+.admin-nav-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 6px;
+}
+.admin-nav-group-toggle {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: calc(100% - 16px);
-  margin: 6px 8px 2px;
-  padding: 9px 10px;
+  width: 100%;
+  padding: 8px 12px;
   border: none;
+  border-left: 2px solid transparent;
   background: transparent;
-  color: rgba(255, 255, 255, 0.55);
+  color: #666;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: -0.005em;
   border-radius: 8px;
   cursor: pointer;
-  transition: background 140ms ease, color 140ms ease;
-  /* Keep the "Other Pages" label on a single line — in flex it would
-     otherwise shrink and wrap to "Other / Pages" once the count chip +
-     chevron claim the row width. */
+  text-align: left;
   white-space: nowrap;
+  transition: background 140ms ease, color 140ms ease;
 }
-.admin-nav-other-toggle > span:first-of-type { flex: 1; min-width: 0; }
-.admin-nav-other-toggle:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: #f8fafc;
+.admin-nav-group-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.admin-nav-group-toggle:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: #111;
 }
-.admin-nav-other-toggle.is-open { color: #f8fafc; }
-.admin-nav-other-count {
+.admin-nav-group.is-open > .admin-nav-group-toggle { color: #111; }
+.admin-nav-group-count {
   font-size: 10px;
   font-weight: 800;
   padding: 1px 6px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.75);
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(15, 23, 42, 0.7);
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
-.admin-light .admin-nav-other-toggle { color: rgba(15, 23, 42, 0.6); }
-.admin-light .admin-nav-other-toggle:hover { background: rgba(0, 0, 0, 0.04); color: #0f172a; }
-.admin-light .admin-nav-other-toggle.is-open { color: #0f172a; }
-.admin-light .admin-nav-other-count {
-  background: rgba(0, 0, 0, 0.06);
-  color: rgba(15, 23, 42, 0.75);
+.admin-nav-group-chevron {
+  flex-shrink: 0;
+  opacity: 0.55;
+  transition: transform 160ms ease;
 }
+.admin-nav-group.is-open .admin-nav-group-chevron { transform: rotate(180deg); }
+.admin-nav-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 2px 0 6px 19px;
+  padding-left: 6px;
+  border-left: 1px solid rgba(0, 0, 0, 0.08);
+}
+.admin-nav-item.admin-nav-subitem { padding: 6px 10px; }
+
+/* "Recent" strip — the last few pages the admin visited, under the
+   pinned rows. Fed by the per-admin history (profiles.admin_nav_order). */
+.admin-nav-recent { margin-top: 4px; }
+.admin-nav-recent-label,
+.admin-nav-item-prefix {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(15, 23, 42, 0.4);
+}
+.admin-nav-recent-label { padding: 8px 14px 2px; }
+.admin-nav-item-prefix { text-transform: none; letter-spacing: 0; font-weight: 500; }
+
+.admin-dark .admin-nav-group-toggle { color: rgba(255, 255, 255, 0.5); }
+.admin-dark .admin-nav-group-toggle:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.95);
+}
+.admin-dark .admin-nav-group.is-open > .admin-nav-group-toggle { color: #f8fafc; }
+.admin-dark .admin-nav-group-count {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.75);
+}
+.admin-dark .admin-nav-group-items { border-left-color: rgba(255, 255, 255, 0.1); }
+.admin-dark .admin-nav-recent-label,
+.admin-dark .admin-nav-item-prefix { color: rgba(255, 255, 255, 0.35); }
 
 .admin-nav-empty {
   padding: 24px 14px;
