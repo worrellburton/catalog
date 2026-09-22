@@ -188,19 +188,12 @@
 }
 .admin-nav-item.admin-nav-subitem { padding: 6px 10px; }
 
-/* "Recent" strip — the last few pages the admin visited, under the
-   pinned rows. Fed by the per-admin history (profiles.admin_nav_order). */
-.admin-nav-recent { margin-top: 4px; }
-.admin-nav-recent-label,
+/* Group name shown before a page label in nav-search results. */
 .admin-nav-item-prefix {
   font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-weight: 500;
   color: rgba(15, 23, 42, 0.4);
 }
-.admin-nav-recent-label { padding: 8px 14px 2px; }
-.admin-nav-item-prefix { text-transform: none; letter-spacing: 0; font-weight: 500; }
 
 .admin-dark .admin-nav-group-toggle { color: rgba(255, 255, 255, 0.5); }
 .admin-dark .admin-nav-group-toggle:hover {
@@ -213,7 +206,6 @@
   color: rgba(255, 255, 255, 0.75);
 }
 .admin-dark .admin-nav-group-items { border-left-color: rgba(255, 255, 255, 0.1); }
-.admin-dark .admin-nav-recent-label,
 .admin-dark .admin-nav-item-prefix { color: rgba(255, 255, 255, 0.35); }
 
 .admin-nav-empty {
@@ -1497,6 +1489,39 @@ html.admin-on-dark-canvas .admin-topbar,
 
 .admin-cell-muted {
   color: #999 !important;
+}
+
+/* Users page — tab strip and rows.
+   Human tabs sit in their own pill on the left; the synthetic (AI) pill is
+   pushed to the right edge of the page so the two populations read as
+   separate groups. */
+.admin-users-tabrow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+.admin-users-tabrow .admin-users-tabs {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-bottom: 0;
+}
+.admin-users-tabs-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #888;
+  padding: 2px 6px 0;
+}
+/* Rows: every cell stays on one line (dates were wrapping "Aug 24, /
+   2026"), and the padding is tightened so a row reads as one simple line.
+   The wrapper already scrolls horizontally when the columns don't fit. */
+@media (min-width: 769px) {
+  .admin-users-grid .admin-table td { white-space: nowrap; padding: 8px 14px; }
+  .admin-users-grid .admin-table th { white-space: nowrap; }
 }
 
 /* Pipeline health page — inline explanatory note under a panel, a
@@ -7122,3 +7147,118 @@ html.eq-page .gen-queue-host { display: none; }
 .admin-cell-sub { font-size: 12px; color: #888; margin-top: 2px; }
 .admin-dark .admin-cell-sub { color: rgba(255,255,255,0.5); }
 .admin-loading { padding: 24px; color: #888; }
+
+/* Products tab — Tools menu (the maintenance actions, folded from a row of
+   nine buttons into one dropdown) and the per-row Details hover icon. */
+.admin-tools-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 280px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  padding: 4px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.admin-tools-menu > .admin-btn {
+  justify-content: flex-start;
+  width: 100%;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13px;
+  text-align: left;
+}
+.admin-tools-menu > .admin-btn:hover:not(:disabled) { background: #f3f4f6; }
+.admin-dark .admin-tools-menu { background: #1c1c1e; border-color: rgba(255, 255, 255, 0.1); }
+.admin-dark .admin-tools-menu > .admin-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.06); }
+
+.admin-detail-hover {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: #cbd5e1;
+  cursor: help;
+  outline: none;
+}
+.admin-detail-hover.has-data { color: #4f46e5; background: rgba(79, 70, 229, 0.08); }
+.admin-detail-hover-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  width: 320px;
+  padding: 12px 14px;
+  background: #1f2937;
+  color: #f9fafb;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+  white-space: normal;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.admin-detail-hover:hover .admin-detail-hover-panel,
+.admin-detail-hover:focus-within .admin-detail-hover-panel,
+.admin-detail-hover:focus .admin-detail-hover-panel {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.admin-detail-hover-row + .admin-detail-hover-row {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.admin-detail-hover-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 2px;
+}
+.admin-detail-hover-value { color: #f9fafb; }
+.admin-detail-hover-value.is-empty { color: rgba(255, 255, 255, 0.35); font-style: italic; }
+.admin-detail-hover-regen {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e5e7eb;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.admin-detail-hover-regen:disabled { cursor: default; opacity: 0.6; }
+/* "More filters" menu on the Products tab — the secondary buckets wrap as
+   chips; the date picker sits underneath. */
+.admin-filters-menu {
+  right: 0;
+  left: auto;
+  min-width: 420px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px;
+}
+.admin-filters-menu > .admin-tab { margin-left: 0 !important; }

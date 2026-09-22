@@ -14,10 +14,17 @@ import type { UserRole } from '~/types/roles';
 import { USER_ROLE_LABELS } from '~/types/roles';
 import AdminWaitlistPanel from '~/components/AdminWaitlistPanel';
 
+// Compact absolute date: "Aug 24" this year, "Aug 24, 2025" otherwise. The
+// year only earns its space when it carries information; the cell is also
+// nowrap (CSS) so a date never breaks across two lines.
 function formatDate(iso: string | null): string {
   if (!iso) return '-';
   const d = new Date(iso);
-  return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+  if (Number.isNaN(d.getTime())) return '-';
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString('en-US', sameYear
+    ? { month: 'short', day: 'numeric' }
+    : { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 // "Last online" reads better at a glance as a relative duration than
@@ -37,7 +44,7 @@ function formatRelative(iso: string | null): string {
   const diffDay = Math.floor(diffHr / 24);
   if (diffDay === 1) return 'yesterday';
   if (diffDay < 7) return `${diffDay}d ago`;
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+  return formatDate(iso);
 }
 
 interface UserRow {
@@ -1326,14 +1333,9 @@ export default function AdminUsers() {
       {/* Group label distinguishes real people (Waitlist / Users /
           Admins) from synthetic AI personas living on their own tab.
           Pure visual — the active tab still drives the table below. */}
-      <div className="admin-tabs" style={{ alignItems: 'flex-end', gap: 20 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span style={{
-            fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
-            textTransform: 'uppercase', color: '#888',
-          }}>
-            Human
-          </span>
+      <div className="admin-users-tabrow">
+        <div className="admin-tabs admin-users-tabs">
+          <span className="admin-users-tabs-label">Human</span>
           <div style={{ display: 'flex', gap: 4 }}>
             <div className="admin-tab-group">
               <button className={`admin-tab ${activeTab === 'waitlist' ? 'active' : ''}`} onClick={() => setActiveTab('waitlist')}>
@@ -1357,13 +1359,8 @@ export default function AdminUsers() {
             </div>
           </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span style={{
-            fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
-            textTransform: 'uppercase', color: '#888',
-          }}>
-            Synthetic
-          </span>
+        <div className="admin-tabs admin-users-tabs">
+          <span className="admin-users-tabs-label">Synthetic</span>
           <div className="admin-tab-group">
             <button className={`admin-tab ${activeTab === 'ai' ? 'active' : ''}`} onClick={() => setActiveTab('ai')}>
               AI{aiUsers.length > 0 && <span className="admin-tab-count">{aiUsers.length}</span>}

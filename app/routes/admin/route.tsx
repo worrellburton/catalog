@@ -5,7 +5,6 @@ import { useAuth } from '~/hooks/useAuth';
 import { isAdminRole } from '~/types/roles';
 import { supabase } from '~/utils/supabase';
 import { promoteQueuedAds } from '~/services/product-creative';
-import { getAdminNavOrder, saveAdminNavOrder } from '~/services/admin-nav-order';
 import AdminSidebarNav from '~/components/admin/AdminSidebarNav';
 import { adminNavItems, ADMIN_SEARCH_ITEMS, findAdminNavGroup, type AdminNavItem } from '~/constants/admin-nav';
 
@@ -82,40 +81,6 @@ export default function AdminLayout() {
   const [isDark, setIsDark] = useState(false);
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') || '');
   const [searchOpen, setSearchOpen] = useState(false);
-
-  // MRU sidebar order — persisted per admin on profiles.admin_nav_order.
-  // We hydrate once on mount (or when the signed-in user changes), then
-  // bubble the matching nav item to the top on every route change and
-  // write back to Supabase. The write is fire-and-forget: a failure
-  // just means the next session won't carry the latest tap, no UI
-  // disruption. mruHydrated gates the very first save so we don't
-  // overwrite the row before the read finishes.
-  const [mruOrder, setMruOrder] = useState<string[]>([]);
-  const [mruHydrated, setMruHydrated] = useState(false);
-  useEffect(() => {
-    if (!user?.id) return;
-    let cancelled = false;
-    getAdminNavOrder().then(order => {
-      if (cancelled) return;
-      setMruOrder(order);
-      setMruHydrated(true);
-    });
-    return () => { cancelled = true; };
-  }, [user?.id]);
-  useEffect(() => {
-    if (!mruHydrated) return;
-    const matched = pickNavMatch(location.pathname, adminNavItems);
-    if (!matched) return;
-    setMruOrder(prev => {
-      // Already at the head? No-op — avoids a redundant write on
-      // initial mount when the user lands on whatever was already
-      // their most-recent page.
-      if (prev[0] === matched) return prev;
-      const next = [matched, ...prev.filter(t => t !== matched)];
-      void saveAdminNavOrder(next);
-      return next;
-    });
-  }, [location.pathname, mruHydrated]);
 
   // The nav item for the page we're on — collapsed sidebar shows just
   // this one icon, centred, until the admin hovers to expand the rail.
@@ -385,7 +350,6 @@ export default function AdminLayout() {
         </div>
         <AdminSidebarNav
           navSearch={navSearch}
-          recentOrder={mruOrder}
           openGroups={openGroups}
           onToggleGroup={toggleGroup}
           onItemClick={() => setSidebarOpen(false)}

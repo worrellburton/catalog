@@ -333,3 +333,96 @@ export async function triggerProfileCrawl(
     return false;
   }
 }
+
+// ─── Products ingested by a job ──────────────────────────────────────
+
+/** One product a crawl job brought in, trimmed to what an admin row shows. */
+export interface CrawlJobProduct {
+  id: string;
+  name: string;
+  brand: string;
+  price: string;
+  url: string;
+  image: string | null;
+}
+
+interface CrawlJobProductRow {
+  id: string;
+  name: string | null;
+  brand: string | null;
+  price: string | null;
+  url: string | null;
+  image_url: string | null;
+  primary_image_url: string | null;
+}
+
+const PRODUCT_SELECT = 'id, name, brand, price, url, image_url, primary_image_url';
+const PRODUCT_PAGE = 1000;
+
+function mapCrawlJobProduct(p: CrawlJobProductRow): CrawlJobProduct {
+  return {
+    id: p.id,
+    name: p.name || 'Untitled',
+    brand: p.brand || '',
+    price: p.price || '',
+    url: p.url || '',
+    image: p.primary_image_url || p.image_url || null,
+  };
+}
+
+/**
+ * Every product a crawl job ingested, in ingest order.
+ *
+ * Two provenance paths, tried in order:
+ *  1. The generic crawler records each scraped page in crawl_discovered_urls
+ *     with the product_id it produced — join through those.
+ *  2. The ShopMy profile ingest (supabase/functions/shopmy-ingest) writes no
+ *     discovered-URL rows; its products carry the curator handle in
+ *     raw_data.shopmy.curator, and the job's site_name IS that handle (the
+ *     wizard passes preview.curator as the job name). Same filter the
+ *     wizard's own progress poll uses. Paged because PostgREST caps a
+ *     response at 1000 rows and a ShopMy shop can exceed that.
+ */
+export async function listCrawlJobProducts(job: Pick<CrawlJob, 'id' | 'site_name'>): Promise<CrawlJobProduct[]> {
+  if (!supabase) return [];
+
+  const { data: urls, error: urlErr } = await supabase
+    .from('crawl_discovered_urls')
+    .select('product_id')
+    .eq('crawl_job_id', job.id)
+    .not('product_id', 'is', null)
+    .order('created_at', { ascending: true });
+  if (urlErr) throw urlErr;
+  const ids = (urls || []).map(u => u.product_id as string);
+  if (ids.length > 0) {
+    const out: CrawlJobProduct[] = [];
+    for (let i = 0; i < ids.length; i += PRODUCT_PAGE) {
+      const { data, error } = await supabase
+        .from('products')
+        .select(PRODUCT_SELECT)
+        .in('id', ids.slice(i, i + PRODUCT_PAGE));
+      if (error) throw error;
+      out.push(...((data || []) as CrawlJobProductRow[]).map(mapCrawlJobProduct));
+    }
+    // Keep discovery order — the .in() query returns rows in arbitrary order.
+    const order = new Map(ids.map((id, i) => [id, i]));
+    return out.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+  }
+
+  if (!job.site_name) return [];
+  const out: CrawlJobProduct[] = [];
+  for (let from = 0; ; from += PRODUCT_PAGE) {
+    const { data, error } = await supabase
+      .from('products')
+      .select(PRODUCT_SELECT)
+      .eq('source', 'shopmy')
+      .eq('raw_data->shopmy->>curator', job.site_name)
+      .order('created_at', { ascending: true })
+      .range(from, from + PRODUCT_PAGE - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    out.push(...(data as CrawlJobProductRow[]).map(mapCrawlJobProduct));
+    if (data.length < PRODUCT_PAGE) break;
+  }
+  return out;
+}

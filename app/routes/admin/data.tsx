@@ -12,6 +12,7 @@ import {
 import { getAppSetting } from '~/services/app-settings';
 import { useNavigate, useSearchParams } from '@remix-run/react';
 import { extractFabric } from '~/utils/extractFabric';
+import ProductDetailsHover from '~/components/admin/ProductDetailsHover';
 import { looks as staticLooks, creators as staticCreators } from '~/data/looks';
 import type { Look, Creator } from '~/data/looks';
 import { getLooks, getCreators, invalidateLooksCache } from '~/services/looks';
@@ -541,9 +542,13 @@ export default function AdminData() {
       return p;
     }, { replace: false });
   }, [setSearchParams]);
+  // Gender chip (All / Men / Women / Unisex) — composes with productFilter.
+  const [productGender, setProductGender] = useState<'all' | 'male' | 'female' | 'unisex'>('all');
   const [productFilter, setProductFilter] = useState<'all' | 'no-creative' | 'active' | 'inactive' | 'untagged' | 'soft-deleted' | 'automatic' | 'seeded' | 'affiliate' | 'no-affiliate'>(
     // Deep-link from /admin/seeding: ?tab=products&filters=seeding
-    () => (searchParams.get('filters') === 'seeding' ? 'seeded' : 'all'),
+    // Default is the LIVE bucket — hidden rows are ~94% of the catalog and
+    // the working set is what shoppers can see.
+    () => (searchParams.get('filters') === 'seeding' ? 'seeded' : 'active'),
   );
   // Optional deep-link: ?target=<seed_target_id> narrows products to one seeding
   // target; ?label=<term> is just the display label for the filter chip.
@@ -564,6 +569,17 @@ export default function AdminData() {
   const [dateRefIsoEnd, setDateRefIsoEnd] = useState<string>('');
   const [datePopoverOpen, setDatePopoverOpen] = useState(false);
   const datePopoverRef = useRef<HTMLDivElement | null>(null);
+  // "More filters" dropdown on the Products tab (secondary buckets + date).
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
+  const moreFiltersRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!moreFiltersOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (moreFiltersRef.current && !moreFiltersRef.current.contains(e.target as Node)) setMoreFiltersOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [moreFiltersOpen]);
   // Close on click-away or Escape so the popover doesn't sit stuck
   // open when the admin clicks back into a row.
   useEffect(() => {
@@ -625,6 +641,9 @@ export default function AdminData() {
     }
   }, [dateFilter, dateWindow]);
 
+  const moreFiltersActive =
+    (['no-creative', 'untagged', 'affiliate', 'no-affiliate', 'automatic', 'seeded', 'soft-deleted'].includes(productFilter) ? 1 : 0)
+    + (dateFilter !== 'all' ? 1 : 0);
   const dateFilterLabel = useMemo(() => {
     switch (dateFilter) {
       case 'all':     return 'All time';
@@ -1108,11 +1127,6 @@ export default function AdminData() {
     startedAt: number;
   }
   const [genJobs, setGenJobs] = useState<Map<string, GenJob>>(new Map());
-  // Which row's inline Links/affiliates dropdown is open.
-  const [openLinksRow, setOpenLinksRow] = useState<string | null>(null);
-
-  // Which row's inline Tags dropdown is open (keyed by `${brand}-${name}`).
-  const [openTagsRow, setOpenTagsRow] = useState<string | null>(null);
   // Which row's inline Creative+Photos dropdown is open.
   const [openDetailRow, setOpenCreativeRow] = useState<string | null>(null);
   useEffect(() => {
@@ -1121,24 +1135,6 @@ export default function AdminData() {
     document.addEventListener('keydown', keyHandler);
     return () => document.removeEventListener('keydown', keyHandler);
   }, [openDetailRow]);
-
-  // Tags is now an inline expanded row like Links - close only via the button
-  // or Escape.
-  useEffect(() => {
-    if (!openTagsRow) return;
-    const keyHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenTagsRow(null); };
-    document.addEventListener('keydown', keyHandler);
-    return () => document.removeEventListener('keydown', keyHandler);
-  }, [openTagsRow]);
-
-  // Links is now an inline expanded row (not a floating popup) so the only
-  // way to close it is to click View again or press Escape.
-  useEffect(() => {
-    if (!openLinksRow) return;
-    const keyHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenLinksRow(null); };
-    document.addEventListener('keydown', keyHandler);
-    return () => document.removeEventListener('keydown', keyHandler);
-  }, [openLinksRow]);
 
   // Amazon (Rainforest) lookup modal
   const [showAmazonLookup, setShowAmazonLookup] = useState(false);
@@ -1181,9 +1177,18 @@ export default function AdminData() {
   const [showManualProduct, setShowManualProduct] = useState(false);
   const [showPromptSettings, setShowPromptSettings] = useState(false);
   // Haiku-context column controls: wrap toggles full multi-line text on every
-  // row (off = single-line ellipsis); regeneratingHaiku tracks rows whose
+  // regeneratingHaiku tracks rows whose
   // image read is being re-run so the cell shows a "regenerating…" hint.
-  const [haikuWrap, setHaikuWrap] = useState(false);
+  const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
+  const toolsMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!toolsMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (toolsMenuRef.current && !toolsMenuRef.current.contains(e.target as Node)) setToolsMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [toolsMenuOpen]);
   const [regeneratingHaiku, setRegeneratingHaiku] = useState<Set<string>>(new Set());
   const [bulkHaikuBusy, setBulkHaikuBusy] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
@@ -1762,20 +1767,6 @@ export default function AdminData() {
   // real DB data lands. The seed merge still drives the Looks tab and
   // creator counts; we just don't paint it as if it were the catalog.
   const [productsLoading, setProductsLoading] = useState(true);
-  // Stats column group on the Products table - In Looks, Creators,
-  // Impressions, Saves, Clicks, Date Added all hide behind a single
-  // "Stats" header by default. Click the chevron to expand and see
-  // every column. Persisted so admins don't have to re-expand on
-  // every page load.
-  const [statsExpanded, setStatsExpanded] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    try { return window.localStorage.getItem('admin:products-stats-expanded') === '1'; }
-    catch { return false; }
-  });
-  useEffect(() => {
-    try { window.localStorage.setItem('admin:products-stats-expanded', statsExpanded ? '1' : '0'); }
-    catch { /* quota */ }
-  }, [statsExpanded]);
   const [adProductIds, setAdProductIds] = useState<Set<string>>(new Set());
   const [adVideoMap, setAdVideoMap] = useState<Map<string, string[]>>(new Map());
   // Model + prompt metadata keyed by video_url so each rendered thumb can
@@ -2204,6 +2195,7 @@ export default function AdminData() {
       if (productFilter === 'active' && (p as any).is_active === false) return false;
       if (productFilter === 'inactive' && (p as any).is_active !== false) return false;
       if (productFilter === 'untagged' && p.gender != null) return false;
+      if (productGender !== 'all' && p.gender !== productGender) return false;
       if (productFilter === 'affiliate' || productFilter === 'no-affiliate') {
         const monetized = getProductAffiliateProviders(p as { brand: string | null; url: string | null })
           .some(a => a.rateNumeric > 0 || a.connected);
@@ -2224,7 +2216,7 @@ export default function AdminData() {
       if (!matchesDateFilter(p.created_at)) return false;
       return true;
     }),
-    [allProducts, productFilter, deletedProductKeys, adminQuery, brandFilter, matchesDateFilter, seedTargetParam]
+    [allProducts, productFilter, productGender, deletedProductKeys, adminQuery, brandFilter, matchesDateFilter, seedTargetParam]
   );
   // sharedTableId opts this table into the cross-admin sort state in
   // app_settings — when one admin clicks a column header, every other
@@ -3281,240 +3273,244 @@ export default function AdminData() {
         )}
         {activeTab === 'products' && (
           <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              className="admin-btn admin-btn-secondary"
-              onClick={runPickPrimaryImages}
-              disabled={pickingPrimary}
-              title="Claude vision picks the cleanest solo-product image for every product without one (no human, no other products)."
-            >
-              {pickingPrimary && primaryProgress ? (
-                <>Picking {primaryProgress.done}/{primaryProgress.total}…</>
-              ) : (
-                <>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                    <circle cx="8.5" cy="8.5" r="1.5"/>
-                    <polyline points="21 15 16 10 5 21"/>
-                  </svg>
-                  Pick primary images
-                </>
-              )}
-            </button>
-            <button
-              className="admin-btn admin-btn-secondary"
-              onClick={runCopywriter}
-              disabled={copywriting}
-              title="Claude rewrites product names and adds a hook - only runs on products without display_name"
-            >
-              {copywriting && copywriteProgress ? (
-                <>Rewriting {copywriteProgress.done}/{copywriteProgress.total}…</>
-              ) : (
-                <>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-                    <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                  </svg>
-                  Rewrite with Claude
-                </>
-              )}
-            </button>
-            <button
-              className="admin-btn admin-btn-secondary"
-              onClick={refreshStaleProducts}
-              disabled={refreshing}
-              title="Re-check prices and availability for products not refreshed in 7+ days"
-            >
-              {refreshing && refreshProgress ? (
-                <>Refreshing {refreshProgress.done}/{refreshProgress.total}…</>
-              ) : (
-                <>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-                    <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                  </svg>
-                  Refresh stale
-                </>
-              )}
-            </button>
-            <button
-              className="admin-btn admin-btn-secondary"
-              onClick={async () => {
-                if (auditingTypes) return;
-                setAuditingTypes(true);
-                const result = await auditAllProductTypes();
-                setAuditingTypes(false);
-                showToast(
-                  `Audited ${result.scanned} products - updated ${result.updated}, skipped ${result.skipped}${result.errors ? `, ${result.errors} errors` : ''}.`,
-                );
-                if (result.updated > 0) {
-                  // Refetch so the Type column reflects the new values
-                  // without a manual page reload.
-                  const { data } = await supabase!
-                    .from('products')
-                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
-                    .order('created_at', { ascending: false });
-                  if (data) {
-                    setCrawledProducts(data.map((p) => ({
-                      ...p,
-                      is_crawled: p.scrape_status === 'done' || p.scraped_at !== null,
-                    })) as CrawledProduct[]);
-                  }
-                }
-              }}
-              disabled={auditingTypes}
-              title="Walk every product and infer its type + subtype from its name (e.g. Shoes → Sandals)"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-                <path d="M9 11l3 3 8-8" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-              </svg>
-              {auditingTypes ? 'Auditing…' : 'Type audit'}
-            </button>
-            <button
-              className="admin-btn admin-btn-secondary"
-              onClick={async () => {
-                if (auditingGenders) return;
-                setAuditingGenders(true);
-                const result = await auditAllProductGenders();
-                setAuditingGenders(false);
-                showToast(
-                  `Gender audit - scanned ${result.scanned}, updated ${result.updated}, skipped ${result.skipped}${result.errors ? `, ${result.errors} errors` : ''}.`,
-                );
-                if (result.updated > 0) {
-                  const { data } = await supabase!
-                    .from('products')
-                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
-                    .order('created_at', { ascending: false });
-                  if (data) {
-                    setCrawledProducts(data.map((p) => ({
-                      ...p,
-                      is_crawled: p.scrape_status === 'done' || p.scraped_at !== null,
-                    })) as CrawledProduct[]);
-                  }
-                }
-              }}
-              disabled={auditingGenders}
-              title="Walk every product and infer gender from its name (women's, men's, unisex)"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-                <path d="M9 11l3 3 8-8" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-              </svg>
-              {auditingGenders ? 'Auditing…' : 'Gender audit'}
-            </button>
-            {/* Ingest measurements & fabrics — marks every visible product
-                (the currently-filtered list) as scrape_status=pending so
-                the Modal scraper agent re-extracts size_fit / materials_care
-                on its next cron pass. "Everything on here" is interpreted
-                as the filtered set the admin is looking at, not the
-                whole catalog. */}
-            <button
-              className="admin-btn admin-btn-secondary"
-              disabled={ingestingSpecs}
-              title="Queue every visible product for spec re-scrape (size_fit + materials_care)"
-              onClick={async () => {
-                if (ingestingSpecs) return;
-                const ids = filteredProductsList
-                  .map(p => p.id)
-                  .filter((id): id is string => typeof id === 'string' && id.length > 0);
-                if (ids.length === 0) {
-                  showToast('No syncable products in view — only crawled rows can be re-queued.');
-                  return;
-                }
-                setIngestingSpecs(true);
-                try {
-                  if (!supabase) throw new Error('Supabase not configured');
-                  // Update + select so we know exactly how many rows
-                  // RLS let through. A zero-row response means an admin
-                  // gate failed silently (the previous version threw a
-                  // bare PostgrestError that lost its message when the
-                  // catch tried err instanceof Error).
-                  const { data: updated, error } = await supabase
-                    .from('products')
-                    .update({ scrape_status: 'pending' })
-                    .in('id', ids)
-                    .select('id');
-                  if (error) {
-                    // PostgrestError is a plain object — pull the
-                    // human-readable bits out so the toast is actionable
-                    // ("permission denied for table products" etc.)
-                    // instead of "Unknown error".
-                    const parts = [error.message, error.details, error.hint, error.code]
-                      .filter((p): p is string => typeof p === 'string' && p.length > 0);
-                    throw new Error(parts.join(' · ') || 'Postgrest error');
-                  }
-                  const updatedIds = new Set((updated ?? []).map(r => r.id as string));
-                  if (updatedIds.size === 0) {
-                    throw new Error(
-                      'Update returned 0 rows — RLS likely blocked the write. Sign in as an admin user.',
+            {/* Every maintenance action lives under one Tools menu so the header
+                is the title, Tools and Add Products — not nine buttons. Running
+                actions keep their progress label inside the menu. */}
+            <div ref={toolsMenuRef} style={{ position: 'relative' }}>
+              <button
+                type="button"
+                className="admin-btn admin-btn-secondary"
+                onClick={() => setToolsMenuOpen(o => !o)}
+                aria-haspopup="menu"
+                aria-expanded={toolsMenuOpen}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></svg>
+                Tools
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
+              </button>
+              {toolsMenuOpen && (
+                <div role="menu" className="admin-tools-menu" onClick={() => setToolsMenuOpen(false)}>
+                <button
+                  className="admin-btn admin-btn-secondary"
+                  onClick={runPickPrimaryImages}
+                  disabled={pickingPrimary}
+                  title="Claude vision picks the cleanest solo-product image for every product without one (no human, no other products)."
+                >
+                  {pickingPrimary && primaryProgress ? (
+                    <>Picking {primaryProgress.done}/{primaryProgress.total}…</>
+                  ) : (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                      </svg>
+                      Pick primary images
+                    </>
+                  )}
+                </button>
+                <button
+                  className="admin-btn admin-btn-secondary"
+                  onClick={runCopywriter}
+                  disabled={copywriting}
+                  title="Claude rewrites product names and adds a hook - only runs on products without display_name"
+                >
+                  {copywriting && copywriteProgress ? (
+                    <>Rewriting {copywriteProgress.done}/{copywriteProgress.total}…</>
+                  ) : (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                        <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                      </svg>
+                      Rewrite with Claude
+                    </>
+                  )}
+                </button>
+                <button
+                  className="admin-btn admin-btn-secondary"
+                  onClick={refreshStaleProducts}
+                  disabled={refreshing}
+                  title="Re-check prices and availability for products not refreshed in 7+ days"
+                >
+                  {refreshing && refreshProgress ? (
+                    <>Refreshing {refreshProgress.done}/{refreshProgress.total}…</>
+                  ) : (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                        <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                      </svg>
+                      Refresh stale
+                    </>
+                  )}
+                </button>
+                <button
+                  className="admin-btn admin-btn-secondary"
+                  onClick={async () => {
+                    if (auditingTypes) return;
+                    setAuditingTypes(true);
+                    const result = await auditAllProductTypes();
+                    setAuditingTypes(false);
+                    showToast(
+                      `Audited ${result.scanned} products - updated ${result.updated}, skipped ${result.skipped}${result.errors ? `, ${result.errors} errors` : ''}.`,
                     );
-                  }
-                  setCrawledProducts(prev =>
-                    prev.map(r => updatedIds.has(r.id) ? { ...r, scrape_status: 'pending' } : r)
-                  );
-                  // Fire-and-forget kick to Modal so the first batch
-                  // starts now instead of waiting for the daily cron.
-                  // Modal's per-call batch cap (10) still applies; the
-                  // remaining queue clears on subsequent cron runs.
-                  void triggerScrapeFlush();
-                  showToast(
-                    `Queued ${updatedIds.size} product${updatedIds.size === 1 ? '' : 's'} for spec re-scrape. Modal is processing the first batch now.`,
-                  );
-                } catch (err) {
-                  // Cover both Error instances and bare strings / PostgrestError
-                  // objects that escaped the try block, so the toast is never
-                  // "Unknown error" — that swallowed too many real diagnostics.
-                  const msg = err instanceof Error
-                    ? err.message
-                    : (typeof err === 'string'
-                        ? err
-                        : (err && typeof err === 'object' && 'message' in err
-                            ? String((err as { message?: unknown }).message ?? 'Unknown error')
-                            : 'Unknown error'));
-                  showToast(`Ingest failed: ${msg}`);
-                } finally {
-                  setIngestingSpecs(false);
-                }
-              }}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="2" y="9" width="20" height="6" rx="1"/>
-                <line x1="6" y1="9" x2="6" y2="12"/>
-                <line x1="10" y1="9" x2="10" y2="13"/>
-                <line x1="14" y1="9" x2="14" y2="12"/>
-                <line x1="18" y1="9" x2="18" y2="13"/>
-              </svg>
-              {ingestingSpecs ? 'Queuing…' : 'Ingest measurements & fabrics'}
-            </button>
-            {/* Global settings — editable AI prompts (Polish Primary,
-                Primary Video). Persists to app_settings; edge functions
-                read it on their next run. */}
-            <button
-              className="admin-btn admin-btn-secondary"
-              onClick={() => setShowPromptSettings(true)}
-              title="Settings — edit the AI prompts used for Polish Primary and Primary Video"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
-              Settings
-            </button>
-            {/* Wrap Haiku — toggles the Haiku Context column between a single
-                ellipsised line and full multi-line wrapped text on every row. */}
-            <button
-              className={`admin-btn admin-btn-secondary${haikuWrap ? ' is-active' : ''}`}
-              onClick={() => setHaikuWrap(v => !v)}
-              title={haikuWrap ? 'Haiku context: wrapping — click for single line' : 'Haiku context: single line — click to wrap full text'}
-              aria-pressed={haikuWrap}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, ...(haikuWrap ? { background: '#eef2ff', borderColor: '#c7d2fe', color: '#4338ca' } : {}) }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <line x1="3" y1="6" x2="21" y2="6" />
-                <path d="M3 12h15a3 3 0 1 1 0 6h-4" />
-                <polyline points="16 16 14 18 16 20" />
-                <line x1="3" y1="18" x2="10" y2="18" />
-              </svg>
-              {haikuWrap ? 'Haiku: wrapped' : 'Wrap Haiku'}
-            </button>
+                    if (result.updated > 0) {
+                      // Refetch so the Type column reflects the new values
+                      // without a manual page reload.
+                      const { data } = await supabase!
+                        .from('products')
+                        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
+                        .order('created_at', { ascending: false });
+                      if (data) {
+                        setCrawledProducts(data.map((p) => ({
+                          ...p,
+                          is_crawled: p.scrape_status === 'done' || p.scraped_at !== null,
+                        })) as CrawledProduct[]);
+                      }
+                    }
+                  }}
+                  disabled={auditingTypes}
+                  title="Walk every product and infer its type + subtype from its name (e.g. Shoes → Sandals)"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                    <path d="M9 11l3 3 8-8" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                  </svg>
+                  {auditingTypes ? 'Auditing…' : 'Type audit'}
+                </button>
+                <button
+                  className="admin-btn admin-btn-secondary"
+                  onClick={async () => {
+                    if (auditingGenders) return;
+                    setAuditingGenders(true);
+                    const result = await auditAllProductGenders();
+                    setAuditingGenders(false);
+                    showToast(
+                      `Gender audit - scanned ${result.scanned}, updated ${result.updated}, skipped ${result.skipped}${result.errors ? `, ${result.errors} errors` : ''}.`,
+                    );
+                    if (result.updated > 0) {
+                      const { data } = await supabase!
+                        .from('products')
+                        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
+                        .order('created_at', { ascending: false });
+                      if (data) {
+                        setCrawledProducts(data.map((p) => ({
+                          ...p,
+                          is_crawled: p.scrape_status === 'done' || p.scraped_at !== null,
+                        })) as CrawledProduct[]);
+                      }
+                    }
+                  }}
+                  disabled={auditingGenders}
+                  title="Walk every product and infer gender from its name (women's, men's, unisex)"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                    <path d="M9 11l3 3 8-8" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                  </svg>
+                  {auditingGenders ? 'Auditing…' : 'Gender audit'}
+                </button>
+                {/* Ingest measurements & fabrics — marks every visible product
+                    (the currently-filtered list) as scrape_status=pending so
+                    the Modal scraper agent re-extracts size_fit / materials_care
+                    on its next cron pass. "Everything on here" is interpreted
+                    as the filtered set the admin is looking at, not the
+                    whole catalog. */}
+                <button
+                  className="admin-btn admin-btn-secondary"
+                  disabled={ingestingSpecs}
+                  title="Queue every visible product for spec re-scrape (size_fit + materials_care)"
+                  onClick={async () => {
+                    if (ingestingSpecs) return;
+                    const ids = filteredProductsList
+                      .map(p => p.id)
+                      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+                    if (ids.length === 0) {
+                      showToast('No syncable products in view — only crawled rows can be re-queued.');
+                      return;
+                    }
+                    setIngestingSpecs(true);
+                    try {
+                      if (!supabase) throw new Error('Supabase not configured');
+                      // Update + select so we know exactly how many rows
+                      // RLS let through. A zero-row response means an admin
+                      // gate failed silently (the previous version threw a
+                      // bare PostgrestError that lost its message when the
+                      // catch tried err instanceof Error).
+                      const { data: updated, error } = await supabase
+                        .from('products')
+                        .update({ scrape_status: 'pending' })
+                        .in('id', ids)
+                        .select('id');
+                      if (error) {
+                        // PostgrestError is a plain object — pull the
+                        // human-readable bits out so the toast is actionable
+                        // ("permission denied for table products" etc.)
+                        // instead of "Unknown error".
+                        const parts = [error.message, error.details, error.hint, error.code]
+                          .filter((p): p is string => typeof p === 'string' && p.length > 0);
+                        throw new Error(parts.join(' · ') || 'Postgrest error');
+                      }
+                      const updatedIds = new Set((updated ?? []).map(r => r.id as string));
+                      if (updatedIds.size === 0) {
+                        throw new Error(
+                          'Update returned 0 rows — RLS likely blocked the write. Sign in as an admin user.',
+                        );
+                      }
+                      setCrawledProducts(prev =>
+                        prev.map(r => updatedIds.has(r.id) ? { ...r, scrape_status: 'pending' } : r)
+                      );
+                      // Fire-and-forget kick to Modal so the first batch
+                      // starts now instead of waiting for the daily cron.
+                      // Modal's per-call batch cap (10) still applies; the
+                      // remaining queue clears on subsequent cron runs.
+                      void triggerScrapeFlush();
+                      showToast(
+                        `Queued ${updatedIds.size} product${updatedIds.size === 1 ? '' : 's'} for spec re-scrape. Modal is processing the first batch now.`,
+                      );
+                    } catch (err) {
+                      // Cover both Error instances and bare strings / PostgrestError
+                      // objects that escaped the try block, so the toast is never
+                      // "Unknown error" — that swallowed too many real diagnostics.
+                      const msg = err instanceof Error
+                        ? err.message
+                        : (typeof err === 'string'
+                            ? err
+                            : (err && typeof err === 'object' && 'message' in err
+                                ? String((err as { message?: unknown }).message ?? 'Unknown error')
+                                : 'Unknown error'));
+                      showToast(`Ingest failed: ${msg}`);
+                    } finally {
+                      setIngestingSpecs(false);
+                    }
+                  }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="2" y="9" width="20" height="6" rx="1"/>
+                    <line x1="6" y1="9" x2="6" y2="12"/>
+                    <line x1="10" y1="9" x2="10" y2="13"/>
+                    <line x1="14" y1="9" x2="14" y2="12"/>
+                    <line x1="18" y1="9" x2="18" y2="13"/>
+                  </svg>
+                  {ingestingSpecs ? 'Queuing…' : 'Ingest measurements & fabrics'}
+                </button>
+                {/* Global settings — editable AI prompts (Polish Primary,
+                    Primary Video). Persists to app_settings; edge functions
+                    read it on their next run. */}
+                <button
+                  className="admin-btn admin-btn-secondary"
+                  onClick={() => setShowPromptSettings(true)}
+                  title="Settings — edit the AI prompts used for Polish Primary and Primary Video"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
+                  Settings
+                </button>
+                </div>
+              )}
+            </div>
             <div ref={addMenuRef} style={{ position: 'relative' }}>
               <button
                 className="admin-btn admin-btn-primary"
@@ -4505,270 +4501,303 @@ export default function AdminData() {
                 ).length}
               </span>
             </button>
-            <button
-              className={`admin-tab ${productFilter === 'no-creative' ? 'active' : ''}`}
-              onClick={() => setProductFilter('no-creative')}
-            >
-              Show without creative
-              <span className="admin-tab-badge">
-                {allProducts.filter(p =>
-                  !p.hasCreative
-                  && !deletedProductKeys.has(`${p.brand}-${p.name}`)
-                ).length}
-              </span>
-            </button>
-            <button
-              className={`admin-tab ${productFilter === 'untagged' ? 'active' : ''}`}
-              onClick={() => setProductFilter('untagged')}
-              title="Products missing a gender tag - leak into every shopper's feed because untagged products bypass the gender filter"
-            >
-              Untagged
-              <span className="admin-tab-badge">
-                {allProducts.filter(p =>
-                  p.gender == null
-                  && !deletedProductKeys.has(`${p.brand}-${p.name}`)
-                ).length}
-              </span>
-            </button>
-            <button
-              className={`admin-tab ${productFilter === 'affiliate' ? 'active' : ''}`}
-              onClick={() => setProductFilter('affiliate')}
-              title="Products whose link has a real affiliate program (tracked affiliate.com URL, known retailer, or brand program)"
-            >
-              Affiliate links
-              <span className="admin-tab-badge">
-                {allProducts.filter(p =>
-                  !deletedProductKeys.has(`${p.brand}-${p.name}`)
-                  && getProductAffiliateProviders(p as { brand: string | null; url: string | null }).some(a => a.rateNumeric > 0 || a.connected)
-                ).length}
-              </span>
-            </button>
-            <button
-              className={`admin-tab ${productFilter === 'no-affiliate' ? 'active' : ''}`}
-              onClick={() => setProductFilter('no-affiliate')}
-              title="Products with no detected affiliate program — clickouts still monetize through the Shopnomix wrapper, but there's no program-level link"
-            >
-              No affiliate links
-              <span className="admin-tab-badge">
-                {allProducts.filter(p =>
-                  !deletedProductKeys.has(`${p.brand}-${p.name}`)
-                  && !getProductAffiliateProviders(p as { brand: string | null; url: string | null }).some(a => a.rateNumeric > 0 || a.connected)
-                ).length}
-              </span>
-            </button>
-            {/* Date-added filter. Spacer pushes it to the right edge of
-                the tab row so it reads as a tool, not another category.
-                Soft-delete tab follows it on the far right, styled red
-                so the destructive bucket is visually unmistakable. */}
-            <div style={{ flex: 1 }} />
-            <div ref={datePopoverRef} style={{ position: 'relative' }}>
+            {/* Gender — composes with whichever bucket is selected. */}
+            <span className="admin-tab-group" style={{ marginLeft: 8 }} role="group" aria-label="Gender">
+              {([['all', 'All'], ['male', 'Men'], ['female', 'Women'], ['unisex', 'Unisex']] as Array<[typeof productGender, string]>).map(([g, label]) => (
+                <button
+                  key={g}
+                  type="button"
+                  className={`admin-tab ${productGender === g ? 'active' : ''}`}
+                  onClick={() => setProductGender(g)}
+                >
+                  {label}
+                </button>
+              ))}
+            </span>
+            {/* Everything that isn't Show all / Showing / Hidden / gender lives
+                behind one More filters button, so the filter row is a single
+                line. The count shows how many of these are engaged. */}
+            <div ref={moreFiltersRef} style={{ position: 'relative', marginLeft: 'auto' }}>
               <button
                 type="button"
-                className={`admin-tab ${dateFilter !== 'all' ? 'active' : ''}`}
-                onClick={() => setDatePopoverOpen(v => !v)}
-                title="Filter by when the product was added to the catalog"
+                className={`admin-tab ${moreFiltersActive > 0 ? 'active' : ''}`}
+                onClick={() => setMoreFiltersOpen(v => !v)}
+                aria-haspopup="menu"
+                aria-expanded={moreFiltersOpen}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                  <line x1="16" y1="2" x2="16" y2="6" />
-                  <line x1="8" y1="2" x2="8" y2="6" />
-                  <line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
-                <span>Date added: {dateFilterLabel}</span>
-                {dateFilter !== 'all' && (
-                  <span
-                    role="button"
-                    aria-label="Clear date filter"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDateFilter('all');
-                      setDateRefIso('');
-                      setDateRefIsoEnd('');
-                    }}
-                    style={{ marginLeft: 4, opacity: 0.7, cursor: 'pointer' }}
-                  >
-                    ×
-                  </span>
-                )}
+                More filters
+                {moreFiltersActive > 0 && <span className="admin-tab-badge">{moreFiltersActive}</span>}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
               </button>
-              {datePopoverOpen && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 6px)',
-                    right: 0,
-                    minWidth: 260,
-                    background: '#fff',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: 12,
-                    boxShadow: '0 18px 50px rgba(0, 0, 0, 0.18)',
-                    padding: 12,
-                    zIndex: 30,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 8,
-                  }}
+              {moreFiltersOpen && (
+                <div role="menu" className="admin-tools-menu admin-filters-menu">
+                <button
+                  className={`admin-tab ${productFilter === 'no-creative' ? 'active' : ''}`}
+                  onClick={() => setProductFilter('no-creative')}
                 >
-                  <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#666' }}>
-                    Quick ranges
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                    {([
-                      ['all',   'All time'],
-                      ['today', 'Today'],
-                      ['week',  'This week'],
-                      ['month', 'This month'],
-                    ] as Array<[DateFilterMode, string]>).map(([mode, label]) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        className={`admin-tab ${dateFilter === mode ? 'active' : ''}`}
-                        onClick={() => {
-                          setDateFilter(mode);
+                  Show without creative
+                  <span className="admin-tab-badge">
+                    {allProducts.filter(p =>
+                      !p.hasCreative
+                      && !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                    ).length}
+                  </span>
+                </button>
+                <button
+                  className={`admin-tab ${productFilter === 'untagged' ? 'active' : ''}`}
+                  onClick={() => setProductFilter('untagged')}
+                  title="Products missing a gender tag - leak into every shopper's feed because untagged products bypass the gender filter"
+                >
+                  Untagged
+                  <span className="admin-tab-badge">
+                    {allProducts.filter(p =>
+                      p.gender == null
+                      && !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                    ).length}
+                  </span>
+                </button>
+                <button
+                  className={`admin-tab ${productFilter === 'affiliate' ? 'active' : ''}`}
+                  onClick={() => setProductFilter('affiliate')}
+                  title="Products whose link has a real affiliate program (tracked affiliate.com URL, known retailer, or brand program)"
+                >
+                  Affiliate links
+                  <span className="admin-tab-badge">
+                    {allProducts.filter(p =>
+                      !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                      && getProductAffiliateProviders(p as { brand: string | null; url: string | null }).some(a => a.rateNumeric > 0 || a.connected)
+                    ).length}
+                  </span>
+                </button>
+                <button
+                  className={`admin-tab ${productFilter === 'no-affiliate' ? 'active' : ''}`}
+                  onClick={() => setProductFilter('no-affiliate')}
+                  title="Products with no detected affiliate program — clickouts still monetize through the Shopnomix wrapper, but there's no program-level link"
+                >
+                  No affiliate links
+                  <span className="admin-tab-badge">
+                    {allProducts.filter(p =>
+                      !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                      && !getProductAffiliateProviders(p as { brand: string | null; url: string | null }).some(a => a.rateNumeric > 0 || a.connected)
+                    ).length}
+                  </span>
+                </button>
+                {/* Date-added filter. Spacer pushes it to the right edge of
+                    the tab row so it reads as a tool, not another category.
+                    Soft-delete tab follows it on the far right, styled red
+                    so the destructive bucket is visually unmistakable. */}
+                <div ref={datePopoverRef} style={{ position: 'relative' }}>
+                  <button
+                    type="button"
+                    className={`admin-tab ${dateFilter !== 'all' ? 'active' : ''}`}
+                    onClick={() => setDatePopoverOpen(v => !v)}
+                    title="Filter by when the product was added to the catalog"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                      <line x1="16" y1="2" x2="16" y2="6" />
+                      <line x1="8" y1="2" x2="8" y2="6" />
+                      <line x1="3" y1="10" x2="21" y2="10" />
+                    </svg>
+                    <span>Date added: {dateFilterLabel}</span>
+                    {dateFilter !== 'all' && (
+                      <span
+                        role="button"
+                        aria-label="Clear date filter"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDateFilter('all');
                           setDateRefIso('');
                           setDateRefIsoEnd('');
-                          setDatePopoverOpen(false);
                         }}
-                        style={{ justifyContent: 'center' }}
+                        style={{ marginLeft: 4, opacity: 0.7, cursor: 'pointer' }}
                       >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#666', marginTop: 6 }}>
-                    Custom
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <select
-                      value={dateFilter === 'before' || dateFilter === 'on' || dateFilter === 'after' || dateFilter === 'between' ? dateFilter : 'on'}
-                      onChange={(e) => {
-                        const next = e.target.value as DateFilterMode;
-                        setDateFilter(next);
-                        if (next !== 'between') setDateRefIsoEnd('');
+                        ×
+                      </span>
+                    )}
+                  </button>
+                  {datePopoverOpen && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 6px)',
+                        right: 0,
+                        minWidth: 260,
+                        background: '#fff',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: 12,
+                        boxShadow: '0 18px 50px rgba(0, 0, 0, 0.18)',
+                        padding: 12,
+                        zIndex: 30,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 8,
                       }}
-                      style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13 }}
                     >
-                      <option value="before">Before</option>
-                      <option value="on">On</option>
-                      <option value="after">After</option>
-                      <option value="between">Between</option>
-                    </select>
-                    <input
-                      type="date"
-                      value={dateRefIso}
-                      onChange={(e) => setDateRefIso(e.target.value)}
-                      style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13, flex: 1, minWidth: 0 }}
-                    />
-                  </div>
-                  {dateFilter === 'between' && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 12, color: '#666', width: 70, textAlign: 'right' }}>and</span>
-                      <input
-                        type="date"
-                        value={dateRefIsoEnd}
-                        onChange={(e) => setDateRefIsoEnd(e.target.value)}
-                        style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13, flex: 1, minWidth: 0 }}
-                      />
+                      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#666' }}>
+                        Quick ranges
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                        {([
+                          ['all',   'All time'],
+                          ['today', 'Today'],
+                          ['week',  'This week'],
+                          ['month', 'This month'],
+                        ] as Array<[DateFilterMode, string]>).map(([mode, label]) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            className={`admin-tab ${dateFilter === mode ? 'active' : ''}`}
+                            onClick={() => {
+                              setDateFilter(mode);
+                              setDateRefIso('');
+                              setDateRefIsoEnd('');
+                              setDatePopoverOpen(false);
+                            }}
+                            style={{ justifyContent: 'center' }}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#666', marginTop: 6 }}>
+                        Custom
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <select
+                          value={dateFilter === 'before' || dateFilter === 'on' || dateFilter === 'after' || dateFilter === 'between' ? dateFilter : 'on'}
+                          onChange={(e) => {
+                            const next = e.target.value as DateFilterMode;
+                            setDateFilter(next);
+                            if (next !== 'between') setDateRefIsoEnd('');
+                          }}
+                          style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13 }}
+                        >
+                          <option value="before">Before</option>
+                          <option value="on">On</option>
+                          <option value="after">After</option>
+                          <option value="between">Between</option>
+                        </select>
+                        <input
+                          type="date"
+                          value={dateRefIso}
+                          onChange={(e) => setDateRefIso(e.target.value)}
+                          style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13, flex: 1, minWidth: 0 }}
+                        />
+                      </div>
+                      {dateFilter === 'between' && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 12, color: '#666', width: 70, textAlign: 'right' }}>and</span>
+                          <input
+                            type="date"
+                            value={dateRefIsoEnd}
+                            onChange={(e) => setDateRefIsoEnd(e.target.value)}
+                            style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13, flex: 1, minWidth: 0 }}
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
+                {/* Automatic — products discovered & added by the autonomous
+                    Claude + Gemini pipeline. AI accent (indigo + sparkle) so it
+                    reads as the auto bucket, not another plain category. */}
+                <button
+                  className={`admin-tab ${productFilter === 'automatic' ? 'active' : ''}`}
+                  onClick={() => setProductFilter('automatic')}
+                  title="Products added automatically by the Claude + Gemini pipeline"
+                  style={{
+                    marginLeft: 8,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: productFilter === 'automatic' ? '#4f46e5' : '#eef2ff',
+                    color: productFilter === 'automatic' ? '#fff' : '#4338ca',
+                    border: `1px solid ${productFilter === 'automatic' ? '#4338ca' : '#c7d2fe'}`,
+                    fontWeight: 600,
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 100 100" fill="currentColor" aria-hidden="true">
+                    <path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" />
+                  </svg>
+                  Automatic
+                  <span
+                    className="admin-tab-badge"
+                    style={{
+                      background: productFilter === 'automatic' ? 'rgba(255,255,255,0.22)' : '#c7d2fe',
+                      color: productFilter === 'automatic' ? '#fff' : '#3730a3',
+                    }}
+                  >
+                    {allProducts.filter(p =>
+                      (p as { source?: string | null }).source === AUTO_SOURCE
+                      && !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                    ).length}
+                  </span>
+                </button>
+                {/* Seeded — products fetched by the demand-driven Seeding loop
+                    (/admin/seeding). Teal accent so it reads as its own bucket. */}
+                <button
+                  className={`admin-tab ${productFilter === 'seeded' ? 'active' : ''}`}
+                  onClick={() => setProductFilter('seeded')}
+                  title="Products fetched by the Seeding loop (/admin/seeding)"
+                  style={{
+                    marginLeft: 8,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: productFilter === 'seeded' ? '#0d9488' : '#ccfbf1',
+                    color: productFilter === 'seeded' ? '#fff' : '#0f766e',
+                    border: `1px solid ${productFilter === 'seeded' ? '#0f766e' : '#99f6e4'}`,
+                    fontWeight: 600,
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <path d="M12 2v8M12 10c-3 0-5 2-5 5M12 10c3 0 5 2 5 5M5 22h14M12 13v9" />
+                  </svg>
+                  Seeded
+                  <span
+                    className="admin-tab-badge"
+                    style={{
+                      background: productFilter === 'seeded' ? 'rgba(255,255,255,0.22)' : '#99f6e4',
+                      color: productFilter === 'seeded' ? '#fff' : '#0f766e',
+                    }}
+                  >
+                    {allProducts.filter(p =>
+                      (p as { source?: string | null }).source === SEED_SOURCE
+                      && !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                    ).length}
+                  </span>
+                </button>
+                {/* Soft delete — far-right destructive bucket, styled red
+                    so it never reads as a normal filter category. */}
+                <button
+                  className={`admin-tab admin-tab--danger ${productFilter === 'soft-deleted' ? 'active' : ''}`}
+                  onClick={() => setProductFilter('soft-deleted')}
+                  title="Soft-deleted products. Open this bucket to permanently hard-delete (removes the row + analytics)."
+                  style={{
+                    marginLeft: 8,
+                    background: productFilter === 'soft-deleted' ? '#dc2626' : '#fee2e2',
+                    color: productFilter === 'soft-deleted' ? '#fff' : '#b91c1c',
+                    border: `1px solid ${productFilter === 'soft-deleted' ? '#b91c1c' : '#fecaca'}`,
+                    fontWeight: 600,
+                  }}
+                >
+                  Soft delete
+                  <span
+                    className="admin-tab-badge"
+                    style={{
+                      background: productFilter === 'soft-deleted' ? 'rgba(255,255,255,0.22)' : '#fecaca',
+                      color: productFilter === 'soft-deleted' ? '#fff' : '#991b1b',
+                    }}
+                  >
+                    {allProducts.filter(p => deletedProductKeys.has(`${p.brand}-${p.name}`)).length}
+                  </span>
+                </button>
+                </div>
               )}
             </div>
-            {/* Automatic — products discovered & added by the autonomous
-                Claude + Gemini pipeline. AI accent (indigo + sparkle) so it
-                reads as the auto bucket, not another plain category. */}
-            <button
-              className={`admin-tab ${productFilter === 'automatic' ? 'active' : ''}`}
-              onClick={() => setProductFilter('automatic')}
-              title="Products added automatically by the Claude + Gemini pipeline"
-              style={{
-                marginLeft: 8,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                background: productFilter === 'automatic' ? '#4f46e5' : '#eef2ff',
-                color: productFilter === 'automatic' ? '#fff' : '#4338ca',
-                border: `1px solid ${productFilter === 'automatic' ? '#4338ca' : '#c7d2fe'}`,
-                fontWeight: 600,
-              }}
-            >
-              <svg width="13" height="13" viewBox="0 0 100 100" fill="currentColor" aria-hidden="true">
-                <path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" />
-              </svg>
-              Automatic
-              <span
-                className="admin-tab-badge"
-                style={{
-                  background: productFilter === 'automatic' ? 'rgba(255,255,255,0.22)' : '#c7d2fe',
-                  color: productFilter === 'automatic' ? '#fff' : '#3730a3',
-                }}
-              >
-                {allProducts.filter(p =>
-                  (p as { source?: string | null }).source === AUTO_SOURCE
-                  && !deletedProductKeys.has(`${p.brand}-${p.name}`)
-                ).length}
-              </span>
-            </button>
-            {/* Seeded — products fetched by the demand-driven Seeding loop
-                (/admin/seeding). Teal accent so it reads as its own bucket. */}
-            <button
-              className={`admin-tab ${productFilter === 'seeded' ? 'active' : ''}`}
-              onClick={() => setProductFilter('seeded')}
-              title="Products fetched by the Seeding loop (/admin/seeding)"
-              style={{
-                marginLeft: 8,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                background: productFilter === 'seeded' ? '#0d9488' : '#ccfbf1',
-                color: productFilter === 'seeded' ? '#fff' : '#0f766e',
-                border: `1px solid ${productFilter === 'seeded' ? '#0f766e' : '#99f6e4'}`,
-                fontWeight: 600,
-              }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <path d="M12 2v8M12 10c-3 0-5 2-5 5M12 10c3 0 5 2 5 5M5 22h14M12 13v9" />
-              </svg>
-              Seeded
-              <span
-                className="admin-tab-badge"
-                style={{
-                  background: productFilter === 'seeded' ? 'rgba(255,255,255,0.22)' : '#99f6e4',
-                  color: productFilter === 'seeded' ? '#fff' : '#0f766e',
-                }}
-              >
-                {allProducts.filter(p =>
-                  (p as { source?: string | null }).source === SEED_SOURCE
-                  && !deletedProductKeys.has(`${p.brand}-${p.name}`)
-                ).length}
-              </span>
-            </button>
-            {/* Soft delete — far-right destructive bucket, styled red
-                so it never reads as a normal filter category. */}
-            <button
-              className={`admin-tab admin-tab--danger ${productFilter === 'soft-deleted' ? 'active' : ''}`}
-              onClick={() => setProductFilter('soft-deleted')}
-              title="Soft-deleted products. Open this bucket to permanently hard-delete (removes the row + analytics)."
-              style={{
-                marginLeft: 8,
-                background: productFilter === 'soft-deleted' ? '#dc2626' : '#fee2e2',
-                color: productFilter === 'soft-deleted' ? '#fff' : '#b91c1c',
-                border: `1px solid ${productFilter === 'soft-deleted' ? '#b91c1c' : '#fecaca'}`,
-                fontWeight: 600,
-              }}
-            >
-              Soft delete
-              <span
-                className="admin-tab-badge"
-                style={{
-                  background: productFilter === 'soft-deleted' ? 'rgba(255,255,255,0.22)' : '#fecaca',
-                  color: productFilter === 'soft-deleted' ? '#fff' : '#991b1b',
-                }}
-              >
-                {allProducts.filter(p => deletedProductKeys.has(`${p.brand}-${p.name}`)).length}
-              </span>
-            </button>
           </div>
         {/* Automatic view — Add Products (count picker) + live pipeline
             progress. Only shown on the Automatic tab. */}
@@ -5431,62 +5460,14 @@ export default function AdminData() {
                     }}
                   />
                 </th>
-                <th style={{ textAlign: 'left', minWidth: 56 }} title="Vision-picked solo-product image. Click any photo in the expanded row to override.">Primary</th>
-                <th style={{ textAlign: 'left' }}>Primary Video</th>
-                <SortableTh label="Brand" sortKey="brand" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <SortableTh label="Type · Subtype" sortKey="type" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <SortableTh label="Gender" sortKey="gender" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <th style={{ minWidth: 140 }}>Fabric</th>
-                <th style={{ minWidth: 200 }} title="Claude Haiku's read of the primary image — what the item actually is. Feeds type governance.">Haiku Context</th>
+                <th style={{ textAlign: 'left', minWidth: 96 }} title="Primary image (vision-picked) and primary video. Click either to expand the row.">Media</th>
                 <SortableTh label="Product" sortKey="name" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <th style={{ minWidth: 110 }} title="ASIN (Amazon) or UPC/EAN/GTIN — captured from the page or JSON-LD when available; blank when the site doesn't expose one.">Barcode</th>
-                <th style={{ textAlign: 'center' }} title="When on, this product is live — shown on the home feed AND in search / catalog listings. When off, it's fully hidden from the platform (but stays in this admin table).">Active</th>
-                <th style={{ textAlign: 'center' }} title="Flagged elite in /admin/creative - curated onto the feed and the deck v1.1 background">Elite</th>
+                <SortableTh label="Type · Subtype" sortKey="type" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <th style={{ textAlign: 'center' }} title="Gender, fabric, size & fit, materials, Haiku read, barcode — hover the icon">Details</th>
+                <th style={{ textAlign: 'center' }} title="Live on the feed and in search. ★ = flagged elite in /admin/creative">Live</th>
                 <SortableTh label="Price" sortKey="price" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                {!statsExpanded && (
-                  <th
-                    className="admin-stats-col"
-                    style={{ textAlign: 'center', cursor: 'pointer', userSelect: 'none' }}
-                    onClick={() => setStatsExpanded(true)}
-                    title="Show In Looks, Creators, Impressions, Saves, Clicks"
-                  >
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      Stats
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                    </span>
-                  </th>
-                )}
-                {statsExpanded && (
-                  <>
-                    <th className="admin-stats-col" style={{ textAlign: 'center', cursor: 'pointer', userSelect: 'none', width: 24 }}
-                        onClick={() => setStatsExpanded(false)}
-                        title="Collapse stats columns">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-label="Collapse stats"><polyline points="15 18 9 12 15 6"/></svg>
-                    </th>
-                    <SortableTh className="admin-stats-col" label="In Looks" sortKey="lookCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                    <SortableTh className="admin-stats-col" label="Creators" sortKey="creatorCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                    <SortableTh className="admin-stats-col" label="Impressions" sortKey="impressions" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                    <SortableTh className="admin-stats-col" label="Saves" sortKey="saves" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                    <SortableTh className="admin-stats-col" label="Clicks" sortKey="clicks" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                  </>
-                )}
-                {/* Date Added is now its own untinted column, sitting
-                    next to Method instead of inside the Stats group -
-                    Date is metadata, not engagement, so it shouldn't
-                    share the indigo Stats tint. */}
-                <SortableTh label="Date Added" sortKey="created_at" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <SortableTh label="Method" sortKey="source" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <th>Tags</th>
-                <th>Links</th>
-                <th title="Measurements">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="Measurements">
-                    <rect x="2" y="9" width="20" height="6" rx="1"/>
-                    <line x1="6"  y1="9"  x2="6"  y2="12"/>
-                    <line x1="10" y1="9"  x2="10" y2="13"/>
-                    <line x1="14" y1="9"  x2="14" y2="12"/>
-                    <line x1="18" y1="9"  x2="18" y2="13"/>
-                  </svg>
-                </th>
+                <SortableTh label="Activity" sortKey="impressions" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <SortableTh label="Added" sortKey="created_at" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th></th>
               </tr>
             </thead>
@@ -5520,7 +5501,7 @@ export default function AdminData() {
                       animation: 'pendingShimmer 1.4s ease-in-out infinite',
                     }} />
                   </td>
-                  <td colSpan={20} style={{ padding: '8px 12px' }}>
+                  <td colSpan={15} style={{ padding: '8px 12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span style={{ fontSize: 11, fontWeight: 700, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
                         Scraping
@@ -5576,11 +5557,9 @@ export default function AdminData() {
                   });
                   setLastSelectedIndex(i);
                 };
-                const linksOpen = openLinksRow === rowKey;
-                const tagsOpen = openTagsRow === rowKey;
                 const detailOpen = openDetailRow === rowKey;
-                const affiliates = linksOpen ? getProductAffiliateProviders(p) : [];
-                const rowTags = tagsOpen ? deriveTags(p.name, p.brand) : [];
+                const affiliates = detailOpen ? getProductAffiliateProviders(p) : [];
+                const rowTags = detailOpen ? deriveTags(p.name, p.brand) : [];
                 const rowImages: string[] = (p.images && p.images.length > 0)
                   ? p.images
                   : (p.image_url ? [p.image_url] : []);
@@ -5619,6 +5598,7 @@ export default function AdminData() {
                       Empty box when the picker hasn't run yet, with
                       a subtle hint to expand. */}
                   <td onClick={(e) => e.stopPropagation()}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     {(() => {
                       const primary = (p as { primary_image_url?: string | null }).primary_image_url;
                       const polished = (p as { primary_image_polished?: boolean | null }).primary_image_polished === true;
@@ -5705,8 +5685,6 @@ export default function AdminData() {
                         </button>
                       );
                     })()}
-                  </td>
-                  <td onClick={(e) => e.stopPropagation()}>
                     {(() => {
                       const primaryVideoUrl   = (p as { primary_video_url?: string | null }).primary_video_url ?? null;
                       const primaryImageUrl   = (p as { primary_image_url?: string | null }).primary_image_url ?? null;
@@ -5837,117 +5815,10 @@ export default function AdminData() {
                         </button>
                       );
                     })()}
-                  </td>
-                  <td style={{ textAlign: 'left', fontSize: 12, color: '#475569' }}>
-                    {p.brand ? (
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); navigate(`/admin/brand/${encodeURIComponent(p.brand!)}`); }}
-                        title={`Open ${p.brand} brand page`}
-                        style={{
-                          background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                          color: '#2563eb', fontSize: 12, fontWeight: 500, textAlign: 'left',
-                          textDecoration: 'none',
-                        }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.textDecoration = 'underline'; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.textDecoration = 'none'; }}
-                      >
-                        {p.brand}
-                      </button>
-                    ) : (
-                      <span style={{ color: '#94a3b8' }}>—</span>
-                    )}
-                  </td>
-                  <td style={{ textAlign: 'left', fontSize: 12 }} onClick={e => e.stopPropagation()}>
-                    {/* Consolidated Type · Subtype cell — the live connection
-                        to /admin/governance/types. Click for the derivation
-                        map (what's stored vs. what the name / image infer) and
-                        to change the type/subtype. Assigning a type writes the
-                        same type/gender/type_path cascade the brain writes. */}
-                    <GovernanceTypeCell
-                      productId={p.id ?? ''}
-                      type={p.type ?? null}
-                      subtype={p.subtype ?? null}
-                      name={p.name ?? null}
-                      gender={p.gender ?? null}
-                      haikuContext={(p as { haiku_context?: string | null }).haiku_context ?? null}
-                      showToast={showToast}
-                      onAssigned={(patch) => {
-                        setCrawledProducts(prev => prev.map(r =>
-                          r.id === p.id ? { ...r, type: patch.type, gender: patch.gender } : r));
-                      }}
-                      onAssignedSubtype={(st) => {
-                        setCrawledProducts(prev => prev.map(r =>
-                          r.id === p.id ? { ...r, subtype: st } : r));
-                      }}
-                    />
-                  </td>
-                  <td style={{ textAlign: 'left', fontSize: 12 }}>
-                    {p.gender === 'male' ? (
-                      <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, background: '#dbeafe', color: '#1d4ed8', fontWeight: 500, fontSize: 11 }}>Male</span>
-                    ) : p.gender === 'female' ? (
-                      <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, background: '#fce7f3', color: '#be185d', fontWeight: 500, fontSize: 11 }}>Female</span>
-                    ) : p.gender === 'unisex' ? (
-                      <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontWeight: 500, fontSize: 11 }}>Unisex</span>
-                    ) : (
-                      <span style={{ color: '#cbd5e1' }}> - </span>
-                    )}
-                  </td>
-                  {/* Fabric — derived from materials_care for inline display.
-                      The full hover panel is still on the measurements icon
-                      column further right; this column gives a glanceable
-                      composition string. */}
-                  <td style={{ fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.materials_care ?? undefined}>
-                    {extractFabric(p.materials_care) ?? <span style={{ color: '#cbd5e1' }}>—</span>}
-                  </td>
-                  {/* Haiku context — the vision model's read of the primary
-                      image, regenerated whenever a new primary is picked
-                      (products_haiku_context trigger → haiku-context fn) or
-                      on demand via the ↻ button. "Wrap Haiku" (toolbar) toggles
-                      full multi-line text; otherwise single-line + ellipsis. */}
-                  <td style={{ fontSize: 11.5, color: '#52525b', maxWidth: haikuWrap ? 300 : 240, verticalAlign: 'top' }}
-                    title={(p as { haiku_context?: string | null }).haiku_context ?? undefined}>
-                    {(() => {
-                      const ctx = (p as { haiku_context?: string | null }).haiku_context ?? null;
-                      const isRegen = !!p.id && regeneratingHaiku.has(p.id);
-                      return (
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                          <span style={{
-                            flex: 1, minWidth: 0,
-                            ...(haikuWrap
-                              ? { whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.35 }
-                              : { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }),
-                          }}>
-                            {isRegen
-                              ? <em style={{ color: '#7c3aed' }}>regenerating…</em>
-                              : (ctx ?? <span style={{ color: '#cbd5e1' }}>pending…</span>)}
-                          </span>
-                          {p.id && (
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); void regenerateHaiku(p.id!); }}
-                              disabled={isRegen}
-                              title="Regenerate this product's Haiku context from its image"
-                              aria-label="Regenerate Haiku context"
-                              style={{
-                                flexShrink: 0, width: 22, height: 22, padding: 0, borderRadius: 6,
-                                border: '1px solid #e5e7eb', background: '#fff', cursor: isRegen ? 'default' : 'pointer',
-                                color: '#64748b', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                              }}
-                            >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                                style={isRegen ? { animation: 'admin-spin 0.9s linear infinite' } : undefined} aria-hidden="true">
-                                <polyline points="23 4 23 10 17 10" />
-                                <polyline points="1 20 1 14 7 14" />
-                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })()}
+                    </div>
                   </td>
                   <td style={{ textAlign: 'left' }} onClick={(e) => e.stopPropagation()}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 160 }}>
                     {p.url ? (
                       <a
                         href={p.url}
@@ -5976,15 +5847,70 @@ export default function AdminData() {
                     ) : (
                       <div style={{ fontWeight: 600, fontSize: 12 }}>{p.name}</div>
                     )}
+                      <div style={{ fontSize: 11.5, color: '#475569' }}>
+                    {p.brand ? (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/admin/brand/${encodeURIComponent(p.brand!)}`); }}
+                        title={`Open ${p.brand} brand page`}
+                        style={{
+                          background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                          color: '#2563eb', fontSize: 12, fontWeight: 500, textAlign: 'left',
+                          textDecoration: 'none',
+                        }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.textDecoration = 'underline'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.textDecoration = 'none'; }}
+                      >
+                        {p.brand}
+                      </button>
+                    ) : (
+                      <span style={{ color: '#94a3b8' }}>—</span>
+                    )}
+                      </div>
+                    </div>
                   </td>
-                  {/* Barcode — ASIN / UPC / EAN / GTIN captured by the scraper when
-                      the site exposes it (most DTC/brand sites don't). Monospace;
-                      type shown on hover. */}
-                  <td style={{ fontSize: 11.5, color: '#52525b', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'nowrap' }}
-                    title={(p as { barcode_type?: string | null }).barcode_type ?? undefined}>
-                    {(p as { barcode?: string | null }).barcode ?? <span style={{ color: '#cbd5e1' }}>—</span>}
+                  <td style={{ textAlign: 'left', fontSize: 12 }} onClick={e => e.stopPropagation()}>
+                    {/* Consolidated Type · Subtype cell — the live connection
+                        to /admin/governance/types. Click for the derivation
+                        map (what's stored vs. what the name / image infer) and
+                        to change the type/subtype. Assigning a type writes the
+                        same type/gender/type_path cascade the brain writes. */}
+                    <GovernanceTypeCell
+                      productId={p.id ?? ''}
+                      type={p.type ?? null}
+                      subtype={p.subtype ?? null}
+                      name={p.name ?? null}
+                      gender={p.gender ?? null}
+                      haikuContext={(p as { haiku_context?: string | null }).haiku_context ?? null}
+                      showToast={showToast}
+                      onAssigned={(patch) => {
+                        setCrawledProducts(prev => prev.map(r =>
+                          r.id === p.id ? { ...r, type: patch.type, gender: patch.gender } : r));
+                      }}
+                      onAssignedSubtype={(st) => {
+                        setCrawledProducts(prev => prev.map(r =>
+                          r.id === p.id ? { ...r, subtype: st } : r));
+                      }}
+                    />
                   </td>
                   <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                    {/* Gender, fabric, size & fit, materials, Haiku read and barcode
+                        all live behind one hover icon (they were five columns). */}
+                    <ProductDetailsHover
+                      gender={p.gender ?? null}
+                      fabric={extractFabric(p.materials_care)}
+                      sizeFit={p.size_fit}
+                      materialsCare={p.materials_care}
+                      haiku={(p as { haiku_context?: string | null }).haiku_context ?? null}
+                      barcode={(p as { barcode?: string | null }).barcode ?? null}
+                      barcodeType={(p as { barcode_type?: string | null }).barcode_type ?? null}
+                      sourceLabel={p.source ? (SOURCE_LABELS[p.source] || p.source) : null}
+                      regenerating={!!p.id && regeneratingHaiku.has(p.id)}
+                      onRegenerate={p.id ? () => { void regenerateHaiku(p.id!); } : undefined}
+                    />
+                  </td>
+                  <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                     {p.id ? (
                       <AdminToggle
                         on={(p as any).is_active !== false}
@@ -5993,119 +5919,36 @@ export default function AdminData() {
                     ) : (
                       <span style={{ fontSize: 11, color: '#cbd5e1' }}> - </span>
                     )}
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    {(p as any).is_elite ? (
-                      <span
-                        title="Elite - flag the creative in /admin/creative to toggle"
-                        style={{
-                          display: 'inline-block',
-                          padding: '2px 8px',
-                          borderRadius: 4,
-                          fontSize: 10,
-                          fontWeight: 700,
-                          letterSpacing: '0.5px',
-                          textTransform: 'uppercase',
-                          background: 'rgba(234,179,8,0.15)',
-                          color: '#b88600',
-                          border: '1px solid rgba(234,179,8,0.4)',
-                        }}
-                      >
-                        ★ Elite
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: 11, color: '#cbd5e1' }}> - </span>
-                    )}
+                      {(p as any).is_elite && (
+                        <span title="Elite - flag the creative in /admin/creative to toggle" style={{ fontSize: 12, color: '#b88600' }} aria-label="Elite">★</span>
+                      )}
+                    </div>
                   </td>
                   <td style={{ fontWeight: 600 }}>{p.price}</td>
-                  {!statsExpanded && (
-                    <td
-                      className="admin-stats-col"
-                      style={{ textAlign: 'center', fontSize: 12, cursor: 'pointer' }}
-                      onClick={(e) => { e.stopPropagation(); setStatsExpanded(true); }}
-                      title="Expand stats"
-                    >
-                      {/* Tiny inline summary so the cell isn't empty - e.g.
-                          "5 looks · 132 imp" - so admins glean signal without
-                          expanding when a row has activity. */}
-                      {(p.lookCount > 0 || p.impressions > 0)
-                        ? `${p.lookCount} look${p.lookCount === 1 ? '' : 's'}${p.impressions > 0 ? ` · ${p.impressions.toLocaleString()} imp` : ''}`
-                        : ' - '}
-                    </td>
-                  )}
-                  {statsExpanded && (
-                    <>
-                      <td className="admin-stats-col" onClick={(e) => { e.stopPropagation(); setStatsExpanded(false); }}
-                          style={{ width: 24, cursor: 'pointer' }} />
-                      <td className="admin-stats-col">{p.lookCount}</td>
-                      <td className="admin-stats-col">{p.creatorCount}</td>
-                      <td className="admin-stats-col">{p.impressions > 0 ? p.impressions.toLocaleString() : ' - '}</td>
-                      <td className="admin-stats-col">{p.saves}</td>
-                      <td className="admin-stats-col">{p.clicks}</td>
-                    </>
-                  )}
+                  <td style={{ textAlign: 'center', fontSize: 12, whiteSpace: 'nowrap' }} title="Looks · impressions — expand the row for creators, saves and clicks">
+                    {(p.lookCount > 0 || p.impressions > 0)
+                      ? `${p.lookCount} look${p.lookCount === 1 ? '' : 's'}${p.impressions > 0 ? ` · ${p.impressions.toLocaleString()} imp` : ''}`
+                      : ' - '}
+                  </td>
                   <td className="admin-cell-muted" style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
                     {formatDateAdded(p.created_at)}
                   </td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    {p.source ? (
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '2px 8px',
-                        fontSize: 11,
-                        fontWeight: 600,
-                        borderRadius: 12,
-                        background: p.source === 'amazon'
-                          ? '#fef3c7'
-                          : p.source === 'google_shopping'
-                          ? '#dbeafe'
-                          : '#e9d5ff',
-                        color: p.source === 'amazon'
-                          ? '#92400e'
-                          : p.source === 'google_shopping'
-                          ? '#1d4ed8'
-                          : '#6b21a8',
-                      }}>
-                        {SOURCE_LABELS[p.source] || p.source}
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: 11, color: '#94a3b8' }}> - </span>
-                    )}
-                  </td>
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <button
-                      className="admin-btn admin-btn-secondary"
-                      style={{ fontSize: 11, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setOpenTagsRow(tagsOpen ? null : rowKey);
-                      }}
-                      title={tagsOpen ? 'Close tags' : 'View tags'}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-                        <line x1="7" y1="7" x2="7.01" y2="7" />
-                      </svg>
-                      <span style={{ fontSize: 10, color: '#888' }}>{deriveTags(p.name, p.brand).length}</span>
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                        style={{ transform: tagsOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
-                      >
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </button>
-                  </td>
-                  <td onClick={(e) => e.stopPropagation()}>
+                  <td onClick={(e) => e.stopPropagation()} style={{ whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {/* One expander per row: photos, primary pick, stats, tags
+                        and links all live in the panel below. */}
                     <button
                       className="admin-btn admin-btn-secondary"
                       style={{ fontSize: 11, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setOpenLinksRow(linksOpen ? null : rowKey);
+                        setOpenCreativeRow(detailOpen ? null : rowKey);
                       }}
+                      aria-expanded={detailOpen}
                     >
-                      View
+                      Details
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                        style={{ transform: linksOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
+                        style={{ transform: detailOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
                       >
                         <polyline points="6 9 12 15 18 9" />
                       </svg>
@@ -6131,43 +5974,6 @@ export default function AdminData() {
                         </svg>
                       </button>
                     )}
-                  </td>
-                  <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                    {(() => {
-                      const hasFit  = !!(p.size_fit && p.size_fit.trim());
-                      const hasCare = !!(p.materials_care && p.materials_care.trim());
-                      const hasAny  = hasFit || hasCare;
-                      return (
-                        <div
-                          className={`admin-measurements${hasAny ? ' has-data' : ''}`}
-                          aria-label={hasAny ? 'View measurements' : 'No measurements available'}
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <rect x="2" y="9" width="20" height="6" rx="1"/>
-                            <line x1="6"  y1="9"  x2="6"  y2="12"/>
-                            <line x1="10" y1="9"  x2="10" y2="13"/>
-                            <line x1="14" y1="9"  x2="14" y2="12"/>
-                            <line x1="18" y1="9"  x2="18" y2="13"/>
-                          </svg>
-                          <div className="admin-measurements-tooltip" role="tooltip">
-                            <div className="admin-measurements-row">
-                              <div className="admin-measurements-label">Size &amp; fit</div>
-                              <div className={`admin-measurements-value${hasFit ? '' : ' is-empty'}`}>
-                                {hasFit ? p.size_fit : 'Not available'}
-                              </div>
-                            </div>
-                            <div className="admin-measurements-row">
-                              <div className="admin-measurements-label">Materials &amp; care</div>
-                              <div className={`admin-measurements-value${hasCare ? '' : ' is-empty'}`}>
-                                {hasCare ? p.materials_care : 'Not available'}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </td>
-                  <td>
                     {productFilter === 'soft-deleted' ? (
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button
@@ -6281,12 +6087,29 @@ export default function AdminData() {
                       </svg>
                     </button>
                     )}
+                    </div>
                   </td>
                 </tr>
                 {detailOpen && (
                   <tr className="admin-product-detail-row">
-                    <td colSpan={18} style={{ padding: 0, background: '#fafbff' }}>
-                      <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: (tagsOpen || linksOpen) ? undefined : '1px solid #e5e7eb' }}>
+                    <td colSpan={15} style={{ padding: 0, background: '#fafbff' }}>
+                      <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb' }}>
+                        {/* Activity strip — the numbers that used to be five
+                            optional table columns. */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, marginBottom: 14, fontSize: 12, color: '#475569' }}>
+                          {([
+                            ['In looks', p.lookCount],
+                            ['Creators', p.creatorCount],
+                            ['Impressions', p.impressions],
+                            ['Saves', p.saves],
+                            ['Clicks', p.clicks],
+                          ] as Array<[string, number]>).map(([label, n]) => (
+                            <span key={label} style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
+                              <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#888' }}>{label}</span>
+                              <strong style={{ color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>{n.toLocaleString()}</strong>
+                            </span>
+                          ))}
+                        </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 160px) minmax(120px, 160px) minmax(120px, 160px) 1fr 1fr', gap: 24 }}>
                           {/* Primary preview pinned to the far left so
                               the admin can see the current pick without
@@ -7239,10 +7062,10 @@ export default function AdminData() {
                     </td>
                   </tr>
                 )}
-                {tagsOpen && (
+                {detailOpen && (
                   <tr className="admin-product-tags-row">
-                    <td colSpan={18} style={{ padding: 0, background: '#fafbff' }}>
-                      <div style={{ padding: '12px 20px', borderTop: '1px solid #e5e7eb', borderBottom: linksOpen ? undefined : '1px solid #e5e7eb' }}>
+                    <td colSpan={15} style={{ padding: 0, background: '#fafbff' }}>
+                      <div style={{ padding: '12px 20px', borderTop: '1px solid #e5e7eb' }}>
                         <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
                           Tags
                         </div>
@@ -7264,9 +7087,9 @@ export default function AdminData() {
                     </td>
                   </tr>
                 )}
-                {linksOpen && (
+                {detailOpen && (
                   <tr className="admin-product-links-row">
-                    <td colSpan={18} style={{ padding: 0, background: '#fafbff' }}>
+                    <td colSpan={15} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
                           <div>
@@ -7422,7 +7245,7 @@ export default function AdminData() {
               })}
               {hasMore && (
                 <tr ref={sentinelRef}>
-                  <td colSpan={20} style={{ padding: '16px 12px' }}>
+                  <td colSpan={15} style={{ padding: '16px 12px' }}>
                     <div
                       role="status"
                       aria-live="polite"
