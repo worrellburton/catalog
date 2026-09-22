@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import DirectoryPage from './DirectoryPage';
 import GenderLens from './GenderLens';
-import TypeIcon from './TypeIcon';
+import ProductGrid from './ProductGrid';
 import {
   listProductsByType,
   resolveDirectoryType,
@@ -10,7 +10,6 @@ import {
   type DirectoryType,
   type DirectoryTypeProduct,
 } from '~/services/directory';
-import { posterRendition } from '~/utils/poster-prefetch';
 import type { Product } from '~/data/looks';
 
 // types
@@ -61,30 +60,12 @@ export default function ProductTypeDirectory({ slug, gender, onChangeGender, onO
       onClose={onClose}
     >
       {type && (
-        <div className="dir-type-hero" aria-hidden="true">
-          <TypeIcon path={type.iconPath} size={56} />
-        </div>
+        <ProductGrid
+          products={products}
+          onOpenProduct={onOpenProduct}
+          emptyText={`Nothing in ${type.name} for this selection yet.`}
+        />
       )}
-      {type && products === null ? (
-        <div className="dir-grid dir-grid--products" aria-hidden="true">
-          {Array.from({ length: 8 }).map((_, i) => <div key={i} className="dir-product dir-skeleton" />)}
-        </div>
-      ) : type && products && products.length === 0 ? (
-        <p className="dir-empty">Nothing in {type.name} for this selection yet.</p>
-      ) : type && products ? (
-        <div className="dir-grid dir-grid--products">
-          {products.map(p => (
-            <button key={p.id} type="button" className="dir-product" onClick={() => onOpenProduct(p)}>
-              <span className="dir-product-image">
-                {p.image && <img src={posterRendition(p.image) ?? p.image} alt="" loading="lazy" />}
-              </span>
-              {p.brand && <span className="dir-eyebrow dir-eyebrow--small">{p.brand}</span>}
-              <span className="dir-name dir-name--product">{p.name}</span>
-              {p.price && <span className="dir-soft dir-price">{p.price}</span>}
-            </button>
-          ))}
-        </div>
-      ) : null}
     </DirectoryPage>
   );
 }

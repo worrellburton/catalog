@@ -13,6 +13,7 @@ import { useEscapeKey } from '~/hooks/useEscapeKey';
 import CreativeCardV2 from './CreativeCardV2';
 import { sortByGarmentRole } from '~/utils/garmentOrder';
 import { formatPostedDate } from '~/utils/posted-date';
+import { getCreatorIdentity, type CreatorIdentity } from '~/services/creator-identity';
 import ContinuousFeed from './ContinuousFeed';
 import { useActiveGenderFilter } from '~/hooks/useActiveGenderFilter';
 import { useTrailVideo, useTrailVideoManager } from './TrailVideoHost';
@@ -273,6 +274,10 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // Default 9 → a clean 3×3 mosaic in the right column (admin can override).
   const moreFromCreatorLimit   = getSectionLimit(pageSections, 'more-from-creator', 9);
   const similarLimit           = getSectionLimit(pageSections, 'similar', 8);
+  // The rails are 4 across on desktop (2 on phones), so a count that isn't a
+  // multiple of 4 strands a card on its own row. Round the shown count down
+  // to full rows — 9 shows 8 — once there are at least 4 to show.
+  const fullRows = (n: number) => (n >= 4 ? n - (n % 4) : n);
   // New bounded rails between "More from this creator" and the daily feed.
   // Unknown keys default to enabled (isSectionEnabled) so they render without
   // any admin migration; an operator can later toggle/limit them at /admin/pages.
@@ -777,10 +782,22 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // Desktop head row: the curator's name (static-seed profile first, then the
   // per-look fields services/looks.ts fills from the publisher's profile),
   // the posted date and the product count.
-  const headCreatorName = creatorData?.displayName
+  // Live identity (display name, avatar, socials) resolved from the creators
+  // row + the owner's profile, so the strip never shows a raw handle.
+  const [headIdentity, setHeadIdentity] = useState<CreatorIdentity | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setHeadIdentity(null);
+    if (!look.creator) return;
+    getCreatorIdentity(look.creator).then(id => { if (!cancelled) setHeadIdentity(id); });
+    return () => { cancelled = true; };
+  }, [look.creator]);
+  const headCreatorName = headIdentity?.displayName
+    || creatorData?.displayName
     || look.creatorDisplayName
     || (look.creator?.startsWith('user:') ? '' : look.creator)
     || '';
+  const headAvatar = headIdentity?.avatarUrl || look.creatorAvatar || creatorData?.avatar || '';
   const headFirstName = headCreatorName.split(' ')[0];
   const headPostedDate = formatPostedDate(look.created_at);
   const openCreatorCatalog = () => { handleClose(); onOpenCreator(look.creator); };
@@ -1206,29 +1223,46 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               </button>
             </div>
 
-            {/* Desktop top row (Paper Catalog): curator, posted date, product
-                count, and the way back to their catalog. Hidden on mobile,
-                where the creator chip rides on the video. */}
+            {/* Desktop top row (Paper Catalog): one strip dedicated to the
+                creator — avatar + name, product count, more from them with
+                their socials, the posted date, and the affiliate note.
+                Hidden on mobile, where the creator chip rides on the video. */}
             {headCreatorName && (
               <div className="look-catalog-head">
-                <div className="look-catalog-head-main">
-                  <span className="look-catalog-head-eyebrow">Curated by</span>
-                  <button type="button" className="look-catalog-head-name" onClick={openCreatorCatalog}>
-                    {headCreatorName}
-                  </button>
-                </div>
-                <div className="look-catalog-head-side">
-                  <button type="button" className="look-catalog-head-back" onClick={openCreatorCatalog}>
-                    {headFirstName}&rsquo;s catalog
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <button type="button" className="look-head-creator" onClick={openCreatorCatalog}>
+                  {headAvatar
+                    ? <img className="look-head-avatar" src={headAvatar} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                    : <span className="look-head-avatar look-head-avatar--initial">{headCreatorName.charAt(0).toUpperCase()}</span>}
+                  <span className="look-head-name">{headCreatorName}</span>
+                </button>
+                <span className="look-head-sep" aria-hidden="true" />
+                <span className="look-head-item">{look.products.length} {look.products.length === 1 ? 'product' : 'products'}</span>
+                <span className="look-head-sep" aria-hidden="true" />
+                <span className="look-head-group">
+                  <button type="button" className="look-head-item look-head-link" onClick={openCreatorCatalog}>
+                    More from {headFirstName}
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" />
                     </svg>
                   </button>
-                  <span className="look-catalog-head-meta">
-                    {headPostedDate && <span>{headPostedDate}</span>}
-                    <span>{look.products.length} {look.products.length === 1 ? 'product' : 'products'}</span>
-                  </span>
-                </div>
+                  {headIdentity?.instagram && (
+                    <a className="look-head-social" href={`https://instagram.com/${headIdentity.instagram}`} target="_blank" rel="noopener noreferrer" aria-label={`@${headIdentity.instagram} on Instagram`}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+                    </a>
+                  )}
+                  {headIdentity?.tiktok && (
+                    <a className="look-head-social" href={`https://tiktok.com/@${headIdentity.tiktok}`} target="_blank" rel="noopener noreferrer" aria-label={`@${headIdentity.tiktok} on TikTok`}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V8.98a8.18 8.18 0 004.76 1.52V7.05a4.83 4.83 0 01-1-.36z"/></svg>
+                    </a>
+                  )}
+                </span>
+                {headPostedDate && (
+                  <>
+                    <span className="look-head-sep" aria-hidden="true" />
+                    <span className="look-head-item">Posted {headPostedDate}</span>
+                  </>
+                )}
+                <span className="look-head-note">The products featured here may contain affiliate links.</span>
               </div>
             )}
 
@@ -1402,7 +1436,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               )}
             </h3>
             <div className="look-feed-grid">
-              {feedSections.looksLikeThis.slice(0, similarLimit).map((fl) => (
+              {feedSections.looksLikeThis.slice(0, fullRows(Math.min(similarLimit, feedSections.looksLikeThis.length))).map((fl) => (
                 <CreativeCardV2
                   key={`like-${fl.id}`}
                   slotId={`${directorScope}:like-${fl.id}`}
@@ -1424,9 +1458,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
           <div className="look-feed-section">
             <h3 className="look-feed-heading">More from this creator</h3>
             <div className="look-feed-grid">
-              {aboutCreatorStrip
-                .filter(fl => fl.id !== look.id)
-                .slice(0, moreFromCreatorLimit)
+              {(() => { const others = aboutCreatorStrip.filter(fl => fl.id !== look.id); return others.slice(0, fullRows(Math.min(moreFromCreatorLimit, others.length))); })()
                 .map(fl => (
                   <CreativeCardV2
                     key={`creator-more-${fl.id}`}

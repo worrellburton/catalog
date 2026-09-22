@@ -3,8 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import GenderLens from '~/components/directory/GenderLens';
 import TypeIcon from '~/components/directory/TypeIcon';
-import { groupByDepartment } from '~/components/directory/ProductsDirectory';
-import { listDirectoryTypes, type DirectoryGender, type DirectoryType } from '~/services/directory';
+import { groupTypesByDepartment, listDirectoryTypes, type DirectoryGender, type DirectoryType } from '~/services/directory';
 
 // types
 interface ProductsMegaMenuProps {
@@ -42,7 +41,7 @@ export default function ProductsMegaMenu({ open, gender, onChangeGender, onOpenT
     return () => { cancelled = true; };
   }, [everOpened, types]);
 
-  const groups = useMemo(() => groupByDepartment(types ?? [], gender), [types, gender]);
+  const groups = useMemo(() => groupTypesByDepartment(types ?? [], gender), [types, gender]);
   const lensCounts = useMemo(() => types ? {
     all: types.reduce((n, t) => n + t.counts.all, 0),
     women: types.reduce((n, t) => n + t.counts.women, 0),

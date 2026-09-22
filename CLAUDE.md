@@ -188,8 +188,22 @@ department; clicking a type opens `/products/<type>`.
 |---|---|---|
 | `/creators` | `components/directory/CreatorsDirectory.tsx` | `listDirectoryCreators` — creators table + live looks (posters via `looks_creative`) + `creator_follows`; **featured** = `featured_creators` table (Admin → Creators star), ranked list below |
 | `/brands` | `BrandsDirectory.tsx` | `loadBrands()` (products aggregated by brand); opens `BrandPage` |
-| `/products`, `/products/<type>` | `ProductsDirectory.tsx`, `ProductTypeDirectory.tsx` | `listDirectoryTypes` / `listProductsByType` (`services/directory.ts`, one cached products pull) |
+| `/products`, `/products/<type>` | `ProductsDirectory.tsx` (every product + type chips), `ProductTypeDirectory.tsx`; both render `ProductGrid.tsx` | `listProducts` / `listProductsByType` / `listDirectoryTypes` (`services/directory.ts`, one cached products pull) |
 | `/catalogs` | `CatalogsDirectory.tsx` | `listDirectoryCatalogs` (live, non-home catalogs with products); opens the catalog as a feed search |
+
+Every section page opens on a **hero landing** (`components/directory/DirectoryHero.tsx`):
+"Shop by" italic eyebrow, the ghosted word (Creator / Brand / Type / Catalog),
+the featured item's serif title, description and outlined action, dots and
+arrows, and its image with the next slide peeking; it auto-advances until
+hovered. Slides come from the page's own featured items (featured creators,
+top brands, top types, featured catalogs).
+
+The look page's desktop top row is a **creator strip** (`.look-catalog-head`
+in `look-overlay.css`): avatar + name · product count · more from them (+
+Instagram / TikTok from the owner's profile, via `services/creator-identity.ts`)
+· posted date, with the affiliate note at the right. The Similar / More-from
+rails below the look are fixed at 4 columns on desktop, gutters grow past
+1360px, and their counts round down to full rows (`fullRows` in LookOverlay).
 
 Routing: each path is a child stub of the persistent `_index` layout
 (`vite.config.ts`); `_index` holds `directory` state seeded from the path,

@@ -33,6 +33,8 @@ export interface DirectoryType {
   /** 24×24 path data drawn by the generate-type-icons function. */
   iconPath: string | null;
   counts: Record<DirectoryGender, number>;
+  /** A product image to stand for the type (the hero slide). */
+  heroImage: string | null;
 }
 
 export interface DirectoryTypeProduct extends Product {
@@ -245,6 +247,8 @@ export async function listDirectoryTypes(): Promise<DirectoryType[]> {
       department: parent.name,
       sort: n.sort,
       iconPath: n.icon_path,
+      heroImage: members.find(p => p.primary_image_url || p.image_url)?.primary_image_url
+        ?? members.find(p => p.image_url)?.image_url ?? null,
       counts: {
         all: members.length,
         women: members.filter(p => genderMatches(p.gender, 'women')).length,
@@ -266,6 +270,25 @@ export async function resolveDirectoryType(slug: string): Promise<DirectoryType 
   const types = await listDirectoryTypes();
   const key = slug.toLowerCase();
   return types.find(t => typeSlug(t.name) === key || t.name.toLowerCase() === key) ?? null;
+}
+
+/** Every active product for the lens — the /products screen. */
+export async function listProducts(lens: DirectoryGender): Promise<DirectoryTypeProduct[]> {
+  const products = await fetchActiveProducts();
+  return products.filter(p => genderMatches(p.gender, lens)).map(toProduct);
+}
+
+/** Types with at least one product for the lens, grouped by department in
+ *  taxonomy order (the mega menu's columns). */
+export function groupTypesByDepartment(types: DirectoryType[], lens: DirectoryGender): Array<{ department: string; types: DirectoryType[] }> {
+  const groups: Array<{ department: string; types: DirectoryType[] }> = [];
+  for (const t of types) {
+    if (t.counts[lens] === 0) continue;
+    let g = groups.find(x => x.department === t.department);
+    if (!g) { g = { department: t.department, types: [] }; groups.push(g); }
+    g.types.push(t);
+  }
+  return groups;
 }
 
 export async function listProductsByType(typeName: string, lens: DirectoryGender): Promise<DirectoryTypeProduct[]> {
