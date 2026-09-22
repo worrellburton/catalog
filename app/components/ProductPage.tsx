@@ -597,14 +597,15 @@ export default function ProductPage({
   );
 
   // Similar must read as a full, intentional grid — exactly 8 when we have that
-  // many unique matches, otherwise 6 (both land cleanly on the 2-col mobile grid;
-  // never a dangling 5th/7th tile). A sparse similarity RPC is topped up with
-  // DISTINCT popular items (pickFrom de-dupes and drops the current product) so
-  // the grid still reaches 6/8 instead of collapsing to a sparse rail. An empty
-  // RPC yields nothing — we don't fabricate "Similar" out of pure popular.
+  // many unique matches, otherwise 4 (both fill the 4-col desktop grid and the
+  // 2-col mobile grid; never a dangling tile on a last row). A sparse
+  // similarity RPC is topped up with DISTINCT popular items (pickFrom de-dupes
+  // and drops the current product) so the grid still reaches 4/8 instead of
+  // collapsing to a sparse rail. An empty RPC yields nothing — we don't
+  // fabricate "Similar" out of pure popular.
   const similarShown = useMemo(() => {
     if (moreLikeThis.length === 0) return [] as ProductAd[];
-    const target = moreLikeThis.length >= 8 ? 8 : 6;
+    const target = moreLikeThis.length >= 8 ? 8 : 4;
     if (moreLikeThis.length >= target) return moreLikeThis.slice(0, target);
     const seen = new Set(moreLikeThis.map(c => c.product_id));
     const fillers = pickFrom(popularFallback, target).filter(c => !seen.has(c.product_id));

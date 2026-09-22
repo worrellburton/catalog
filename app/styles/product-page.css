@@ -1084,27 +1084,18 @@
   .pd-similar-grid > * { animation: none; }
 }
 
-@media (min-width: 768px) {
-  .pd-similar-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
+/* Desktop: FIXED at 4 across — never 5 or 6 on wide screens. The rails are
+   padded to multiples of 4 (fillToExact / padLooks), so 4 columns always
+   fills every row. Past 1360px the rail stops growing and the gutters take
+   the extra width (same rule as the look page). Phones keep 2 across. */
 @media (min-width: 1024px) {
-  .pd-similar-grid {
+  .pd-similar-grid,
+  .pd-look-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
-}
-
-@media (min-width: 1280px) {
-  .pd-similar-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1600px) {
-  .pd-similar-grid {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+  .pd-similar-feed,
+  .pd-look-feed {
+    padding-inline: max(28px, calc((100% - 1360px) / 2));
   }
 }
 
@@ -1287,18 +1278,7 @@
   aspect-ratio: 3 / 4;
   align-self: start;
 }
-@media (min-width: 768px) {
-  .pd-look-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-@media (min-width: 1024px) {
-  .pd-look-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-}
-@media (min-width: 1280px) {
-  .pd-look-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-}
-@media (min-width: 1600px) {
-  .pd-look-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-}
+/* Column count lives with .pd-similar-grid above (4 across from 1024px). */
 
 .pd-look-tile {
   position: relative;
