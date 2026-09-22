@@ -1068,7 +1068,7 @@ class VideoPlaybackDirector {
     //   distance <= playMargin     → must play
     //   distance >= releaseMargin  → must release
     //   in between                 → keep current state (don't churn)
-    type Ranked = { id: string; entry: CardEntry; distance: number };
+    type Ranked = { id: string; entry: CardEntry; distance: number; rect: DOMRect };
     const ranked: Ranked[] = [];
     // Iterate only the near-viewport set, NOT every registered card. This is
     // what keeps rank() cheap on a long-scrolled feed: getRect() (a forced
@@ -1086,7 +1086,7 @@ class VideoPlaybackDirector {
       // Remember the nearest on-screen tile's size so the next pass's poolMax()
       // can size the pool to whatever grid (1/2/3-col catalog) is live.
       if (distance < nearTileDist) { nearTileDist = distance; nearTileW = rect.width; nearTileH = rect.height; }
-      ranked.push({ id, entry, distance });
+      ranked.push({ id, entry, distance, rect });
     }
     if (nearTileW > 0) { this.observedTileW = nearTileW; this.observedTileH = nearTileH; }
 
@@ -1180,7 +1180,7 @@ class VideoPlaybackDirector {
     let coldBudget = attachBudget();
     let deferredColdAttach = false;
 
-    for (const { id, entry, distance } of wantsPlay) {
+    for (const { id, entry, distance, rect } of wantsPlay) {
       if (entry.videoEl) {
         // Already assigned — keep it playing. If it's paused for any reason
         // (assignment happened mid-flick, autoplay rejected, source swap),
@@ -1309,7 +1309,10 @@ class VideoPlaybackDirector {
       // Fresh clip → size now but DON'T reveal on a possibly-stale readyState
       // (hls.js reuse keeps the prior clip's frame); the frame listeners reveal
       // once THIS clip paints. Same-src reclaim → the frame is this clip's, reveal now.
-      this.applyCoverSize(entry, slot.el, !isNewClip);
+      // Pass the rect measured at the top of this pass: re-reading layout here,
+      // right after the style writes above, forced a synchronous layout per
+      // newly-acquired card.
+      this.applyCoverSize(entry, slot.el, !isNewClip, rect);
 
       // Move the element into the card's slot div, then start playback. We always
       // call play() here — the browser queues against the in-flight buffering and
@@ -1418,10 +1421,12 @@ class VideoPlaybackDirector {
    * reveal is always of THIS clip. (On Safari/iOS native HLS, el.src=url resets
    * readyState to 0 synchronously, so a fresh clip is readyState<2 at acquire and
    * this gate is a no-op there — it only matters for the hls.js path.) */
-  private applyCoverSize(entry: CardEntry, el: HTMLVideoElement, canReveal = true): void {
+  private applyCoverSize(entry: CardEntry, el: HTMLVideoElement, canReveal = true, rect?: DOMRect): void {
     if (entry.videoEl !== el) return;
     const vw = el.videoWidth, vh = el.videoHeight;
-    const r = entry.getRect();
+    // Callers inside rank() pass the rect they already measured (read-before-
+    // write); the media-event listeners measure fresh.
+    const r = rect ?? entry.getRect();
     if (!r.width || !r.height) return;
     // Prefer the video's own intrinsic aspect (exact); before metadata, fall back
     // to the poster-derived aspectHint so the box is ALREADY cover-correct on the

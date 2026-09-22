@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo, Suspense } from 'react';
 import { useLocation, useNavigate, Outlet } from '@remix-run/react';
 import { lazyWithReload } from '~/utils/lazyWithReload';
+import { setHeroScrollProgress } from '~/utils/hero-scroll-progress';
 import PasswordGate from '~/components/PasswordGate';
 import WaitlistScreen from '~/components/WaitlistScreen';
 import ShoppingForHero from '~/components/home/ShoppingForHero';
@@ -576,17 +577,13 @@ export default function Home() {
       setHeroScrolled(true);
       setHeroBarFaded(false);
       setHeroRailInert(false);
-      if (typeof document !== 'undefined') {
-        document.documentElement.style.setProperty('--hero-scroll-progress', '1');
-      }
+      setHeroScrollProgress(1, true);
       return;
     }
     setHeroScrolled(false);
     setHeroBarFaded(false);
     setHeroRailInert(false);
-    if (typeof document !== 'undefined') {
-      document.documentElement.style.setProperty('--hero-scroll-progress', '0');
-    }
+    setHeroScrollProgress(0, true);
     let raf = 0;
     const onScroll = () => {
       // Ignore the body-lock's programmatic scroll jumps while a look/product
@@ -597,7 +594,10 @@ export default function Home() {
       raf = requestAnimationFrame(() => {
         raf = 0;
         const ratio = Math.min(1, Math.max(0, window.scrollY / (window.innerHeight * 0.5)));
-        document.documentElement.style.setProperty('--hero-scroll-progress', String(ratio));
+        // Written on the three consumer elements, not <html> (see the util):
+        // a root custom-property write re-resolved style for every mounted
+        // card each scrolled frame in the hero band.
+        setHeroScrollProgress(ratio);
         // Same 0.5 cutoff as the CSS opacity formula (1.2 - r*2.4 ≤ 0)
         // so pointer-events flip off the moment the bar is visually
         // invisible. Without this hook the faded bar still ate taps
@@ -1385,7 +1385,7 @@ export default function Home() {
     // Remember the look the user came from (if any) so the back button
     // on ProductPage returns to that look instead of the empty feed. On a
     // memory restore (nav:'none') the caller sets this from the frame below.
-    if (nav === 'push') setProductOpenedFromLook(selectedLook);
+    if (nav === 'push') setProductOpenedFromLook(selectedLookRef.current);
     setSelectedLook(null);
     // Unify the two product-page surfaces. Opening from a CreativeCard
     // used to set selectedCreative (so the page rendered with the video
@@ -1551,7 +1551,10 @@ export default function Home() {
         })
         .catch(() => { /* leave rail empty rather than throw */ });
     }
-  }, [fetchSimilarProducts, pushRecent, selectedLook]);
+    // selectedLook is read through selectedLookRef so opening/closing a look
+    // doesn't mint a new handler identity — that re-rendered every mounted
+    // feed card (the memo'd feed → section → card chain) on each look open.
+  }, [fetchSimilarProducts, pushRecent]);
 
   const lastOpenAtRef = useRef(0);
   const handleOpenCreative = useCallback(async (creative: ProductAd, opts?: { nav?: NavMode }) => {
@@ -1613,7 +1616,7 @@ export default function Home() {
     if (nav === 'push') pauseAllVideos(); // skip on Back-restore — see handleOpenProduct
     // On a memory restore (nav:'none') the caller sets this from the frame
     // below; a fresh open records the look the shopper came from.
-    if (nav === 'push') setProductOpenedFromLook(selectedLook);
+    if (nav === 'push') setProductOpenedFromLook(selectedLookRef.current);
     setSelectedLook(null);
     setSelectedProduct(mapped);
     setSelectedCreative(creative);
@@ -1673,7 +1676,10 @@ export default function Home() {
 
     simP.then(setSelectedSimilar).catch(() => { /* leave brand fallback empty */ });
     graphP.then(rows => { if (rows.length) setGraphPairs(rows); }).catch(() => {});
-  }, [fetchSimilarProducts, pushRecent, selectedLook]);
+    // selectedLook is read through selectedLookRef so opening/closing a look
+    // doesn't mint a new handler identity — that re-rendered every mounted
+    // feed card (the memo'd feed → section → card chain) on each look open.
+  }, [fetchSimilarProducts, pushRecent]);
 
   // Editorial looks for the "You might also like" grid on ProductPage. One
   // fetch per session; reused across every overlay open.
@@ -2401,17 +2407,29 @@ export default function Home() {
     if (typeof window === 'undefined') return;
     if (waitlistMode || !isGuest(user) || view !== 'app') return;
     if (overlayOpen || creatorFilter || brandFilter || guestGate) return;
+    // Count read once per mount (it only changes via bumpNudgeCount below),
+    // and the check sampled once per frame — this used to hit sessionStorage
+    // on every raw scroll event.
+    const shown = getNudgeCount();
+    if (shown >= 2) return;
+    const screensDeep = shown === 0 ? 3 : 8;
+    let raf = 0;
     const onScroll = () => {
-      const shown = getNudgeCount();
-      if (shown >= 2) { window.removeEventListener('scroll', onScroll); return; }
-      const screensDeep = shown === 0 ? 3 : 8;
-      if (window.scrollY > window.innerHeight * screensDeep) {
-        bumpNudgeCount();
-        setGuestGate({ variant: 'feed' });
-      }
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        if (window.scrollY > window.innerHeight * screensDeep) {
+          window.removeEventListener('scroll', onScroll);
+          bumpNudgeCount();
+          setGuestGate({ variant: 'feed' });
+        }
+      });
     };
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, [user, view, overlayOpen, creatorFilter, brandFilter, guestGate, waitlistMode]);
 
   // Lock the underlying feed while a product/look overlay is open so

@@ -535,7 +535,16 @@ function FeedSection({
     return () => observer.disconnect();
   }, [batch, pool.length, visibleCount, searchMode, onLoadMore, scrollRoot, isInitial]);
 
+  // Reset the mounted window only when the feed's LEADING content actually
+  // changes (new query / filter / shuffle). `looks` is a fresh array on every
+  // realtime look update, seen-id write, or hidden-product change too — and
+  // resetting on identity alone collapsed a deep-scrolled grid back to one
+  // batch mid-session (document shrinks → scroll jump, every card remounts).
+  const leadSigRef = useRef<string | null>(null);
   useEffect(() => {
+    const sig = looks.slice(0, batch).map(l => l.id).join(',');
+    if (leadSigRef.current === sig) return;
+    leadSigRef.current = sig;
     setVisibleCount(batch);
     setPoolCycles(1);
   }, [looks, batch]);

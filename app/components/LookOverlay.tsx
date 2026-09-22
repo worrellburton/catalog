@@ -770,6 +770,16 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
 
   useEscapeKey(() => handleClose());
 
+  // Products in garment-role order, computed once per look (the regex role
+  // inference used to run inline in JSX on every render).
+  const sortedProducts = useMemo(() => sortByGarmentRole(look.products), [look.products]);
+
+  // Cleared on unmount: if the layer is torn down mid-slide (logo home reset,
+  // browser Back) the deferred onClose() must not fire against a parent
+  // callback that already popped this frame — that could pop history twice.
+  const closeTimerRef = useRef<number>(0);
+  useEffect(() => () => { window.clearTimeout(closeTimerRef.current); }, []);
+
   const handleClose = useCallback(() => {
     // Reverse handoff: pin the hero's exact frame onto the source card and
     // seek the card's element to match, so the grid resumes where the
@@ -781,7 +791,8 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     // on back. The pushScope effect's cleanup still pops the scope on unmount.
     director.beginScopeExit(directorScope);
     setIsAnimatingOut(true);
-    setTimeout(() => {
+    window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = window.setTimeout(() => {
       // Hand the WARM, still-playing hero element back to the director so the
       // source grid card resumes THAT element instantly (no cold re-acquire /
       // re-buffer — the brief "video stops on back" stutter). Done at the end of
@@ -1229,7 +1240,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   {productsEnabled && shopperBody.heightCm && (
                     <SizeMatchSummary products={look.products} body={shopperBody} />
                   )}
-                  {productsEnabled && sortByGarmentRole(look.products).map((p, pi) => (
+                  {productsEnabled && sortedProducts.map((p, pi) => (
                     <div key={pi} className="product-card" onClick={() => handleProductClick(p)}>
                       <div className="product-card-thumb">
                         <ProductMiniMedia
@@ -1448,7 +1459,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
             layoutMode={0}
             onOpenLook={handleFeedLookClick}
             onOpenCreator={onOpenCreator}
-            onOpenBrowser={(url, title) => onOpenBrowser(url, title)}
+            onOpenBrowser={onOpenBrowser}
             onOpenProduct={onOpenProduct}
             onOpenCreative={onOpenCreative}
             onCreateCatalog={onCreateCatalog}

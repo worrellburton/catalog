@@ -1030,6 +1030,11 @@ export default function ProductPage({
       : undefined);
   const heroHlsUrl = pipelineMode === 'hls' ? effectiveCreative?.hlsUrl : null;
 
+  // Cleared on unmount — see LookOverlay: a deferred onClose() after the
+  // layer is already gone could pop the nav stack twice.
+  const closeTimerRef = useRef<number>(0);
+  useEffect(() => () => { window.clearTimeout(closeTimerRef.current); }, []);
+
   const handleClose = useCallback(() => {
     // Reverse handoff — see LookOverlay.handleClose: the source card resumes
     // at the hero's exact frame instead of restarting.
@@ -1041,7 +1046,8 @@ export default function ProductPage({
     // playing when this page clears. The suspend effect still pops on unmount.
     director.beginScopeExit(directorScope);
     setIsAnimatingOut(true);
-    setTimeout(() => {
+    window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = window.setTimeout(() => {
       // Hand the WARM hero element back to the director (see LookOverlay) so the
       // source grid card resumes that exact element instantly — no cold
       // re-buffer / brief stop. release() makes TrailVideoHost forget it.
