@@ -462,6 +462,89 @@
   }
 }
 
+/* ── Desktop top row (Paper Catalog) ───────────────────────────────────
+   Who curated the look, when it was posted, how many products it holds and
+   the way back to their catalog — the row that sets the page. Mobile keeps
+   the creator chip on the video instead. */
+.look-catalog-head { display: none; }
+@media (min-width: 769px) {
+  .look-catalog-head {
+    display: flex;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 24px;
+    margin: 0 24px 22px;
+    padding: 6px 0 16px;
+    border-bottom: 1px solid var(--pc-rule);
+    flex-shrink: 0;
+  }
+  .look-catalog-head-main,
+  .look-catalog-head-side {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
+  }
+  .look-catalog-head-side { align-items: flex-end; flex-shrink: 0; }
+  .look-catalog-head-eyebrow,
+  .look-catalog-head-back {
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--pc-ink-soft);
+    white-space: nowrap;
+  }
+  .look-catalog-head-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    border: none;
+    background: none;
+    font-family: inherit;
+    cursor: pointer;
+    transition: color 0.15s ease;
+  }
+  .look-catalog-head-back svg { transition: transform 0.18s ease; }
+  .look-catalog-head-back:hover { color: var(--pc-ink); }
+  .look-catalog-head-back:hover svg { transform: translate(2px, -2px); }
+  .look-catalog-head-name {
+    padding: 0;
+    border: none;
+    background: none;
+    text-align: left;
+    font-family: var(--pc-serif);
+    font-size: 26px;
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    color: var(--pc-ink);
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    text-underline-offset: 5px;
+    text-decoration-thickness: 1px;
+    transition: text-decoration-color 0.15s ease;
+  }
+  .look-catalog-head-name:hover { text-decoration-color: var(--pc-ink-soft); }
+  .look-catalog-head-meta {
+    display: flex;
+    align-items: baseline;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    color: var(--pc-ink-soft);
+    white-space: nowrap;
+  }
+  .look-catalog-head-meta span + span::before { content: '\00B7'; margin: 0 8px; }
+  /* The head row already says how many products there are. */
+  .look-tab-count { display: none; }
+}
+
 /* Mobile-only back button inside info panel */
 .look-back-btn-mobile {
   width: 34px;
@@ -537,52 +620,43 @@
 .look-tabs {
   display: flex;
   gap: 0;
-  padding: 0 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  /* Inset like every other rule in the column (head row, product rows). */
+  margin: 0 24px;
+  padding: 0;
+  border-bottom: 1px solid var(--pc-rule);
   flex-shrink: 0;
 }
 
+/* Paper Catalog: the tab reads as a section eyebrow ("PRODUCTS · 3"). */
 .look-tab {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 0;
-  margin-right: 24px;
+  gap: 8px;
+  padding: 12px 0 11px;
+  margin: 0 24px -1px 0;
   background: none;
   border: none;
-  border-bottom: 2px solid transparent;
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 13px;
-  font-weight: 600;
+  border-bottom: 1px solid transparent;
+  color: var(--pc-ink-soft);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
   cursor: pointer;
   transition: color 0.18s, border-color 0.18s;
   font-family: inherit;
   white-space: nowrap;
 }
-
-.look-tab:hover {
-  color: rgba(255, 255, 255, 0.75);
-}
-
-.look-tab.active {
-  color: #fff;
-  border-bottom-color: #fff;
-}
-
+.look-tab:hover { color: var(--pc-ink); }
+.look-tab.active { color: var(--pc-ink); border-bottom-color: var(--pc-ink); }
 .look-tab-count {
-  font-size: 11px;
-  font-weight: 700;
-  background: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.6);
-  border-radius: 10px;
-  padding: 1px 6px;
-  line-height: 1.5;
+  font-size: 10.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--pc-ink-soft);
+  line-height: 1;
 }
-
-.look-tab.active .look-tab-count {
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
-}
+.look-tab-count::before { content: '\00B7'; margin-right: 8px; }
 
 /* Tab content scrollable area */
 .look-tab-content {
@@ -607,40 +681,38 @@
   }
 }
 
-/* Product cards list */
+/* Product rows — Paper Catalog: hairline-ruled rows, no cards. */
 .look-products-list {
-  padding: 4px 24px 24px;
+  padding: 0 24px 4px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
 }
 
 .product-card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
+  gap: 16px;
+  padding: 14px 2px;
+  border-bottom: 1px solid var(--pc-rule);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: padding 0.18s ease;
 }
-
-.product-card:hover {
-  background: rgba(255, 255, 255, 0.1);
+.product-card:last-child { border-bottom: none; }
+@media (hover: hover) {
+  .product-card:hover { padding-left: 8px; padding-right: 0; }
+  .product-card:hover .product-arrow { color: var(--pc-ink); transform: translateX(2px); }
 }
 
 .product-card-thumb {
   /* 3:4 portrait — product/look posters are shot 3:4, so a 1:1 thumb cropped
-     them. Keep the native 3:4 aspect and let the row card grow taller to fit
-     (the flex row sizes to the tallest child) so the poster shows in full, not
-     a tight square crop. */
-  width: 78px;
-  height: 104px;
-  border-radius: 12px;
+     them. Keep the native aspect so the poster shows in full. */
+  width: 64px;
+  height: 84px;
+  border-radius: 2px;
   overflow: hidden;
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--pc-rule);
   /* ProductMiniMedia stacks an absolute <img> + <video> inside; make
      this the positioning context so they fill the box. */
   position: relative;
@@ -650,14 +722,17 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 
 .product-card-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: #fff;
+  font-family: var(--pc-serif);
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: -0.005em;
+  color: var(--pc-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -665,17 +740,20 @@
 }
 
 .product-card-price {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.45);
+  font-size: 13px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--pc-ink-soft);
   display: block;
 }
 
-.light-mode .product-card {
-  background: rgba(0, 0, 0, 0.04);
-}
-
-.light-mode .product-card:hover {
-  background: rgba(0, 0, 0, 0.08);
+.product-card .product-bookmark-btn { color: var(--pc-ink-soft); }
+.product-card .product-bookmark-btn:hover { color: var(--pc-ink); transform: none; }
+.product-card .product-bookmark-btn.active { color: var(--pc-ink); }
+.product-arrow {
+  flex-shrink: 0;
+  color: var(--pc-ink-soft);
+  transition: transform 0.18s ease, color 0.18s ease;
 }
 
 /* Creator commentary — a subtle dark card that matches the overlay theme.
@@ -683,17 +761,14 @@
    white and cost a per-frame additive-blend GPU fill while scrolling (the
    desktop hero↔Similar jank). Flat, theme-matching, zero scroll cost. */
 .look-creator-about {
-  /* Inset 24px to align with the product list (.look-products-list) and the
-     action row (.look-about-actions) — it used to span the panel edge-to-edge,
-     reading wider than everything else stacked with it. */
+  /* Paper Catalog: the commentary sits under a hairline, no card. Inset 24px
+     to align with the product rows and the action row. */
   margin: 0 24px;
-  padding: 18px 20px;
+  padding: 22px 2px 0;
+  border-top: 1px solid var(--pc-rule);
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 16px;
+  gap: 12px;
 }
 
 /* The description is a button now (tap to expand/collapse). Strip the native
@@ -712,7 +787,7 @@
   gap: 8px;
   color: inherit;
   font: inherit;
-  text-align: center;
+  text-align: left;
   cursor: default;
 }
 .look-about-bio-toggle.is-interactive { cursor: pointer; }
@@ -727,14 +802,19 @@
 
 /* "Show more" / "Show less" affordance under the clamped copy. */
 .look-about-more {
-  align-self: center;
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: rgba(255, 255, 255, 0.62);
+  align-self: flex-start;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pc-ink-soft);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
 }
 .look-about-bio-toggle.is-interactive:hover .look-about-more {
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--pc-ink);
+  text-decoration-color: var(--pc-ink-soft);
 }
 
 .look-creator-about-header {
@@ -765,54 +845,93 @@
 }
 
 .look-creator-about-bio {
-  font-size: 14px;
-  line-height: 1.65;
-  color: rgba(255, 255, 255, 0.6);
+  font-family: var(--pc-serif);
+  font-size: 15.5px;
+  line-height: 1.7;
+  color: var(--pc-ink);
   margin: 0;
 }
-/* AI-written look commentary — centered editorial copy. Soft lavender-tinted
-   light text on the dark card, with a faint glow that keeps the "AI" signal
-   without the white wash the old particle panel produced. No scroll transform
-   (the --about-p/--about-drift parallax was removed with the universe). */
+/* AI-written look commentary — the same serif, set in italic. */
 .look-creator-about-bio--ai {
-  text-align: center;
-  font-size: 14.5px;
-  line-height: 1.75;
+  font-size: 16px;
   font-style: italic;
-  letter-spacing: 0.01em;
-  color: rgba(228, 224, 246, 0.82);
-  margin: 0;
-  padding: 2px 4px;
-  text-shadow: 0 0 18px rgba(167, 139, 250, 0.18);
+  padding: 0;
 }
 
-/* The creator-catalog + Comments action row under the commentary. */
+/* Paper Catalog action rows under the commentary: the creator's catalog as a
+   hairline "order line", Comments as a quiet text link beneath it. */
 .look-about-actions {
   display: flex;
+  flex-direction: column;
   align-items: stretch;
-  gap: 10px;
-  margin: 4px 24px 24px;
+  gap: 0;
+  margin: 22px 24px 24px;
+  border-top: 1px solid var(--pc-rule);
 }
 .look-about-actions .look-creator-about-btn {
-  flex: 1;
-  justify-content: center;
-  border-radius: 999px;
-  padding: 11px 14px;
-  width: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
   min-width: 0;
+  padding: 16px 2px;
+  border: none;
+  border-bottom: 1px solid var(--pc-rule);
+  border-radius: 0;
+  background: none;
+  color: var(--pc-ink);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  transition: padding 0.18s ease;
+}
+.look-about-actions .look-creator-about-btn svg {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--pc-ink-soft);
+  transition: transform 0.18s ease, color 0.18s ease;
+}
+@media (hover: hover) {
+  .look-about-actions .look-creator-about-btn:hover {
+    background: none;
+    color: var(--pc-ink);
+    padding-left: 8px;
+    padding-right: 0;
+  }
+  .look-about-actions .look-creator-about-btn:hover svg { color: var(--pc-ink); transform: translateX(2px); }
 }
 .look-about-actions .look-comments-labeled {
-  flex: 1;
+  justify-content: flex-start;
+  gap: 8px;
+  width: auto;
   margin: 0;
   min-width: 0;
+  padding: 14px 2px 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  color: var(--pc-ink-soft);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+.look-about-actions .look-comments-labeled:hover {
+  background: none;
+  color: var(--pc-ink);
+  text-decoration-color: var(--pc-ink-soft);
 }
 .look-about-btn-avatar {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  border: 1px solid var(--pc-rule);
 }
 .look-about-btn-label {
   overflow: hidden;
@@ -1146,20 +1265,19 @@ body:has(.look-overlay.look-overlay--in) {
   }
 
   .look-tabs {
-    padding: 0 16px;
+    margin: 0 16px;
   }
 
   .look-products-list {
-    padding: 8px 16px 16px;
+    padding: 0 16px 4px;
   }
-  /* The commentary card and the action row share the list's 16px gutter
-     (they were inset 24px, reading narrower than the product card above). */
+  /* The commentary and the action rows share the list's 16px gutter. */
   .look-creator-about {
     margin: 0 16px;
-    padding: 16px 18px;
+    padding: 18px 2px 0;
   }
   .look-about-actions {
-    margin: 12px 16px 24px;
+    margin: 18px 16px 24px;
   }
 
   /* Match the comments button inset to the 16px mobile column padding. */
@@ -1699,43 +1817,30 @@ body:has(.look-overlay.look-overlay--in) {
 .product-brand-row {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 3px;
   min-width: 0;
 }
 .product-brand {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 10.5px;
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.18em;
+  color: var(--pc-ink-soft);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Subtype / type pill next to the brand. Reads as a category tag —
-   "Sandals", "Sneakers", "Top" — so the shopper sees the garment
-   shape before the long product name. Subtle border + cyan tint to
-   distinguish from the brand text without competing with it. */
+/* Subtype / type beside the brand ("Sneakers", "Shorts") — Paper Catalog:
+   the same tracked small caps, dot-separated, no pill. */
 .product-subtype-chip {
-  display: inline-block;
-  padding: 1px 7px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: rgba(167, 243, 208, 0.92);
-  background: rgba(16, 185, 129, 0.10);
-  border: 1px solid rgba(16, 185, 129, 0.25);
-  text-transform: capitalize;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--pc-ink-soft);
   white-space: nowrap;
   flex-shrink: 0;
 }
-.light-mode .product-subtype-chip {
-  color: #0e7490;
-  background: #ecfeff;
-  border-color: #a5f3fc;
-}
+.product-brand + .product-subtype-chip::before { content: '\00B7'; margin: 0 8px; }
 
 .product-details h4 {
   font-size: 14px;

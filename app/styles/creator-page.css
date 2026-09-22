@@ -100,34 +100,37 @@ html[data-shell="catalog-app"] .creator-page-scroll {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 40px 0 32px;
+  padding: 44px 0 28px;
 }
 
+/* Paper Catalog header: hairline-ringed avatar, tracked "CURATED BY"
+   eyebrow, serif name, outlined action, quiet counts. Tokens in base.css. */
 .creator-hero-avatar {
-  /* Hero size — gives the creator presence on their own page. The
-     edit-hint pencil overlay rides at the bottom-right (see
-     .creator-hero-avatar-edit) so the avatar still leaves room for it. */
-  width: 100px;
-  height: 100px;
+  width: 96px;
+  height: 96px;
   border-radius: 50%;
   object-fit: cover;
-  border: 3px solid rgba(255, 255, 255, 0.12);
-  margin-bottom: 20px;
+  border: 1px solid var(--pc-rule);
+  margin-bottom: 22px;
 }
 
 .creator-hero-curated {
-  font-size: 15px;
-  font-style: italic;
-  color: rgba(255, 255, 255, 0.45);
-  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--pc-ink-soft);
 }
 
 .creator-hero-name {
-  font-size: clamp(32px, 5vw, 48px);
-  font-weight: 600;
-  color: #fff;
-  margin: 4px 0 20px;
-  letter-spacing: -0.02em;
+  font-family: var(--pc-serif);
+  font-size: clamp(36px, 5vw, 52px);
+  font-weight: 400;
+  line-height: 1.1;
+  color: var(--pc-ink);
+  margin: 10px 0 22px;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
 }
 
 /* Identity-loading skeletons — shown for the beat before the real name /
@@ -163,38 +166,52 @@ html[data-shell="catalog-app"] .creator-page-scroll {
 }
 
 .creator-follow-btn {
-  padding: 10px 32px;
-  font-size: 13px;
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 28px;
+  font-size: 11px;
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #111;
-  background: #fff;
-  border: none;
-  border-radius: 4px;
+  letter-spacing: 0.2em;
+  font-family: inherit;
+  color: var(--pc-ink);
+  background: none;
+  border: 1px solid var(--pc-ink);
+  border-radius: 0;
   cursor: pointer;
-  transition: opacity 0.2s;
-  margin-bottom: 16px;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  margin-bottom: 18px;
 }
-
 .creator-follow-btn:hover {
-  opacity: 0.85;
+  background: var(--pc-ink);
+  color: var(--bg);
+}
+/* "Following" and the self-view "My information": the quiet state. */
+.creator-follow-btn--quiet {
+  color: var(--pc-ink-soft);
+  border-color: var(--pc-rule);
+}
+.creator-follow-btn--quiet:hover {
+  background: none;
+  color: var(--pc-ink);
+  border-color: var(--pc-ink);
 }
 
 .creator-hero-trust {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.4);
-  margin-bottom: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--pc-ink-soft);
+  margin-bottom: 14px;
   display: inline-flex;
   align-items: baseline;
-  gap: 7px;
+  gap: 8px;
 }
 .creator-hero-stat strong {
-  color: rgba(255, 255, 255, 0.82);
-  font-weight: 700;
+  color: var(--pc-ink);
+  font-weight: 500;
 }
-.creator-hero-stat-sep { opacity: 0.5; }
-.light-mode .creator-hero-stat strong { color: rgba(0, 0, 0, 0.7); }
+.creator-hero-stat-sep { opacity: 0.6; }
 
 /* Tappable follower / following stats. */
 .creator-hero-stat--btn {
@@ -207,8 +224,7 @@ html[data-shell="catalog-app"] .creator-page-scroll {
   cursor: pointer;
   transition: color 0.15s;
 }
-.creator-hero-stat--btn:hover { color: rgba(255, 255, 255, 0.85); }
-.light-mode .creator-hero-stat--btn:hover { color: rgba(0, 0, 0, 0.8); }
+.creator-hero-stat--btn:hover { color: var(--pc-ink); }
 
 /* ── Followers / following list sheet ───────────────────────────────── */
 .follow-list-overlay {
@@ -317,7 +333,7 @@ html[data-shell="catalog-app"] .creator-page-scroll {
 .creator-hero-socials {
   display: flex;
   gap: 16px;
-  color: rgba(255, 255, 255, 0.35);
+  color: var(--pc-ink-soft);
 }
 
 .creator-hero-social {
@@ -332,38 +348,39 @@ html[data-shell="catalog-app"] .creator-page-scroll {
 }
 
 .creator-hero-social:hover {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--pc-ink);
 }
 
-/* Creator Navigation */
+/* Creator Navigation — Paper Catalog section eyebrows on a hairline. */
 .creator-nav {
   display: flex;
   justify-content: center;
-  gap: 32px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  gap: 36px;
+  border-bottom: 1px solid var(--pc-rule);
   margin-bottom: 24px;
 }
 
 .creator-nav-tab {
-  padding: 14px 8px;
-  font-size: 15px;
+  padding: 14px 2px 13px;
+  margin-bottom: -1px;
+  font-size: 11px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-family: inherit;
+  color: var(--pc-ink-soft);
   background: none;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-bottom: 1px solid transparent;
   cursor: pointer;
   transition: color 0.2s, border-color 0.2s;
-  letter-spacing: 0.02em;
 }
 
-.creator-nav-tab:hover {
-  color: rgba(255, 255, 255, 0.75);
-}
+.creator-nav-tab:hover { color: var(--pc-ink); }
 
 .creator-nav-tab.active {
-  color: #fff;
-  border-bottom-color: #fff;
+  color: var(--pc-ink);
+  border-bottom-color: var(--pc-ink);
 }
 
 /* Collections selector — a swipeable row of the creator's collections
@@ -746,11 +763,11 @@ html[data-shell="catalog-app"] .creator-page-scroll {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1f2937, #374151);
-  color: #fff;
-  font-size: 36px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  background: var(--pc-rule);
+  color: var(--pc-ink);
+  font-family: var(--pc-serif);
+  font-size: 40px;
+  font-weight: 400;
   text-transform: uppercase;
 }
 
@@ -792,23 +809,15 @@ html[data-shell="catalog-app"] .creator-page-scroll {
 
 /* ── Count badges next to tab labels ───────────────────────────────── */
 .creator-nav-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  padding: 0 6px;
-  margin-left: 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 10px;
-  font-weight: 700;
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
   font-variant-numeric: tabular-nums;
+  color: var(--pc-ink-soft);
 }
-.creator-nav-tab.active .creator-nav-count {
-  background: #fff;
-  color: #111;
-}
+.creator-nav-count::before { content: '\00B7'; margin-right: 8px; }
+.creator-nav-tab.active .creator-nav-count { color: var(--pc-ink); }
 
 /* ── Skeleton grid (loading) ───────────────────────────────────────── */
 .creator-skeleton-grid {
@@ -865,9 +874,6 @@ html[data-shell="catalog-app"] .creator-page-scroll {
   background: #fff;
   color: #111;
 }
-.light-mode .creator-hero-avatar { border-color: rgba(0, 0, 0, 0.08); }
-.light-mode .creator-hero-curated { color: rgba(0, 0, 0, 0.4); }
-.light-mode .creator-hero-name { color: #111; }
 .light-mode .creator-follow-btn--skeleton {
   display: inline-block;
   width: 132px;
@@ -878,15 +884,6 @@ html[data-shell="catalog-app"] .creator-page-scroll {
   border: none !important;
   pointer-events: none;
 }
-
-.creator-follow-btn { color: #fff; background: #111; }
-.light-mode .creator-hero-trust { color: rgba(0, 0, 0, 0.4); }
-.light-mode .creator-hero-socials { color: rgba(0, 0, 0, 0.3); }
-.light-mode .creator-hero-socials svg:hover { color: rgba(0, 0, 0, 0.6); }
-.light-mode .creator-nav { border-bottom-color: rgba(0, 0, 0, 0.08); }
-.light-mode .creator-nav-tab { color: rgba(0, 0, 0, 0.4); }
-.light-mode .creator-nav-tab:hover { color: rgba(0, 0, 0, 0.7); }
-.light-mode .creator-nav-tab.active { color: #111; border-bottom-color: #111; }
 .light-mode .creator-brand-chip {
   color: rgba(0, 0, 0, 0.45);
   border-color: rgba(0, 0, 0, 0.12);
@@ -909,8 +906,6 @@ html[data-shell="catalog-app"] .creator-page-scroll {
   border-color: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
 }
-.light-mode .creator-nav-count { background: rgba(0, 0, 0, 0.08); color: rgba(0, 0, 0, 0.7); }
-.light-mode .creator-nav-tab.active .creator-nav-count { background: rgba(0, 0, 0, 0.85); color: #fff; }
 .light-mode .creator-skeleton-tile {
   background: linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 50%, #f3f4f6 100%);
   background-size: 200% 100%;
@@ -943,7 +938,7 @@ html[data-shell="catalog-app"] .creator-page-scroll {
   }
 
   .creator-hero-name {
-    font-size: 28px;
+    font-size: 32px;
   }
 
   .creator-follow-btn--skeleton {
@@ -958,8 +953,7 @@ html[data-shell="catalog-app"] .creator-page-scroll {
 }
 
 .creator-follow-btn {
-    padding: 8px 24px;
-    font-size: 12px;
+    padding: 10px 22px;
   }
 
   .creator-nav {
