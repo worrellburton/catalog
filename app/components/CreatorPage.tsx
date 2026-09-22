@@ -883,10 +883,9 @@ export default function CreatorPage({
               information" — it opens the profile / info screen. _index
               listens for `catalog:open-profile` and shows the ProfilePage. */
           <button
-            className="creator-follow-btn"
+            className="creator-follow-btn creator-follow-btn--quiet"
             onClick={() => window.dispatchEvent(new CustomEvent('catalog:open-profile'))}
             aria-label="My information"
-            style={{ background: '#fff', color: '#0f172a', border: '1px solid #cbd5e1', display: 'inline-flex', alignItems: 'center', gap: 8 }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <circle cx="12" cy="8" r="4" />
@@ -896,11 +895,10 @@ export default function CreatorPage({
           </button>
         ) : (
           <button
-            className="creator-follow-btn"
+            className={`creator-follow-btn${following ? ' creator-follow-btn--quiet' : ''}`}
             onClick={onToggleFollow}
             disabled={followBusy}
             aria-pressed={following}
-            style={following ? { background: '#fff', color: '#0f172a', border: '1px solid #cbd5e1' } : undefined}
           >
             {following ? 'Following' : 'Follow'}
           </button>
