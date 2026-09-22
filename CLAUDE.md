@@ -195,6 +195,32 @@ Single-page app with React state-driven views:
 - **localStorage bookmarks** — Custom useBookmarks hook for persistent state
 - **`import.meta.env.BASE_URL`** — Vite's built-in env var used for asset paths (replaces Next.js basePath)
 
+### Named style: "Paper Catalog"
+
+**"Paper Catalog" is the canonical name for the typographic, print-catalog
+treatment first shipped on the product page's info column** (screenshot
+reference: brand eyebrow → serif product name → muted price → hairline
+"Shop at Kith ↗" order line → text-only actions → SIZE & FIT spec rows →
+POPULAR IN chips → MORE FROM KITH). Use the name in requests, PRs and code
+("make this Paper Catalog") — it means exactly this recipe:
+
+| Element | Treatment |
+|---|---|
+| Ink tokens | `--pd-ink` (`#f3efe7` dark / `#16140f` light), `--pd-ink-soft` (ink at ~0.6 alpha), `--pd-rule` (ink at 0.16 alpha). Warm off-white / near-black, never pure `#fff` / `#000`. |
+| Eyebrow (brand, section titles) | 10.5–11px, weight 500, uppercase, `letter-spacing: 0.2em`, `--pd-ink-soft`. Sections start with a hairline rule (`1px solid var(--pd-rule)`) and ~22–30px of air. |
+| Display name | Serif stack `--pd-serif` (`'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif`), 36px (28px mobile), weight 400, `line-height: 1.1`, `letter-spacing: -0.01em`, `text-wrap: balance`. |
+| Price / secondary numbers | 17px, weight 400, `--pd-ink-soft`, `tabular-nums`. Quiet, never bold. |
+| Primary action ("order line") | A full-width row between two hairlines: plain label left, `↗` arrow right, no fill, no border-radius. Hover nudges the label 8px right. |
+| Secondary actions | Plain text buttons in a row (no pills, no icons), `--pd-ink-soft` → ink on hover with a 1px underline offset 4px. |
+| Spec rows | Two-column grid `96px / 1fr`, uppercase tracked label (`0.16em`) in soft ink, 14px value in ink, hairline between rows, none after the last. |
+| Chips | The one place a rounded pill is allowed (tags / catalogs), so the flat rules read as deliberate. |
+| Don'ts | No cards, no filled panels, no drop shadows, no gradients, no icon buttons, no bold prices. Rules and whitespace do the separating. |
+
+Reference implementation: `.pd-info--catalog` in `app/styles/product-page.css`
+(markup in `app/components/ProductPage.tsx`). When applying it to another
+surface, reuse the same token names and values so the two read as one system;
+if the tokens move, hoist them to `app/styles/base.css` rather than forking.
+
 ### CSS convention: centering fixed/overlay pills
 
 Center `position: fixed` / `absolute` pills, bars, and overlays with
