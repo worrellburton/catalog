@@ -12,6 +12,7 @@ import {
 import { getAppSetting } from '~/services/app-settings';
 import { useNavigate, useSearchParams } from '@remix-run/react';
 import { extractFabric } from '~/utils/extractFabric';
+import ProductDetailsHover from '~/components/admin/ProductDetailsHover';
 import { looks as staticLooks, creators as staticCreators } from '~/data/looks';
 import type { Look, Creator } from '~/data/looks';
 import { getLooks, getCreators, invalidateLooksCache } from '~/services/looks';
@@ -541,6 +542,8 @@ export default function AdminData() {
       return p;
     }, { replace: false });
   }, [setSearchParams]);
+  // Gender chip (All / Men / Women / Unisex) — composes with productFilter.
+  const [productGender, setProductGender] = useState<'all' | 'male' | 'female' | 'unisex'>('all');
   const [productFilter, setProductFilter] = useState<'all' | 'no-creative' | 'active' | 'inactive' | 'untagged' | 'soft-deleted' | 'automatic' | 'seeded' | 'affiliate' | 'no-affiliate'>(
     // Deep-link from /admin/seeding: ?tab=products&filters=seeding
     () => (searchParams.get('filters') === 'seeding' ? 'seeded' : 'all'),
@@ -1181,9 +1184,18 @@ export default function AdminData() {
   const [showManualProduct, setShowManualProduct] = useState(false);
   const [showPromptSettings, setShowPromptSettings] = useState(false);
   // Haiku-context column controls: wrap toggles full multi-line text on every
-  // row (off = single-line ellipsis); regeneratingHaiku tracks rows whose
+  // regeneratingHaiku tracks rows whose
   // image read is being re-run so the cell shows a "regenerating…" hint.
-  const [haikuWrap, setHaikuWrap] = useState(false);
+  const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
+  const toolsMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!toolsMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (toolsMenuRef.current && !toolsMenuRef.current.contains(e.target as Node)) setToolsMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [toolsMenuOpen]);
   const [regeneratingHaiku, setRegeneratingHaiku] = useState<Set<string>>(new Set());
   const [bulkHaikuBusy, setBulkHaikuBusy] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
@@ -2204,6 +2216,7 @@ export default function AdminData() {
       if (productFilter === 'active' && (p as any).is_active === false) return false;
       if (productFilter === 'inactive' && (p as any).is_active !== false) return false;
       if (productFilter === 'untagged' && p.gender != null) return false;
+      if (productGender !== 'all' && p.gender !== productGender) return false;
       if (productFilter === 'affiliate' || productFilter === 'no-affiliate') {
         const monetized = getProductAffiliateProviders(p as { brand: string | null; url: string | null })
           .some(a => a.rateNumeric > 0 || a.connected);
@@ -2224,7 +2237,7 @@ export default function AdminData() {
       if (!matchesDateFilter(p.created_at)) return false;
       return true;
     }),
-    [allProducts, productFilter, deletedProductKeys, adminQuery, brandFilter, matchesDateFilter, seedTargetParam]
+    [allProducts, productFilter, productGender, deletedProductKeys, adminQuery, brandFilter, matchesDateFilter, seedTargetParam]
   );
   // sharedTableId opts this table into the cross-admin sort state in
   // app_settings — when one admin clicks a column header, every other
@@ -3281,240 +3294,244 @@ export default function AdminData() {
         )}
         {activeTab === 'products' && (
           <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              className="admin-btn admin-btn-secondary"
-              onClick={runPickPrimaryImages}
-              disabled={pickingPrimary}
-              title="Claude vision picks the cleanest solo-product image for every product without one (no human, no other products)."
-            >
-              {pickingPrimary && primaryProgress ? (
-                <>Picking {primaryProgress.done}/{primaryProgress.total}…</>
-              ) : (
-                <>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                    <circle cx="8.5" cy="8.5" r="1.5"/>
-                    <polyline points="21 15 16 10 5 21"/>
-                  </svg>
-                  Pick primary images
-                </>
-              )}
-            </button>
-            <button
-              className="admin-btn admin-btn-secondary"
-              onClick={runCopywriter}
-              disabled={copywriting}
-              title="Claude rewrites product names and adds a hook - only runs on products without display_name"
-            >
-              {copywriting && copywriteProgress ? (
-                <>Rewriting {copywriteProgress.done}/{copywriteProgress.total}…</>
-              ) : (
-                <>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-                    <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                  </svg>
-                  Rewrite with Claude
-                </>
-              )}
-            </button>
-            <button
-              className="admin-btn admin-btn-secondary"
-              onClick={refreshStaleProducts}
-              disabled={refreshing}
-              title="Re-check prices and availability for products not refreshed in 7+ days"
-            >
-              {refreshing && refreshProgress ? (
-                <>Refreshing {refreshProgress.done}/{refreshProgress.total}…</>
-              ) : (
-                <>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-                    <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                  </svg>
-                  Refresh stale
-                </>
-              )}
-            </button>
-            <button
-              className="admin-btn admin-btn-secondary"
-              onClick={async () => {
-                if (auditingTypes) return;
-                setAuditingTypes(true);
-                const result = await auditAllProductTypes();
-                setAuditingTypes(false);
-                showToast(
-                  `Audited ${result.scanned} products - updated ${result.updated}, skipped ${result.skipped}${result.errors ? `, ${result.errors} errors` : ''}.`,
-                );
-                if (result.updated > 0) {
-                  // Refetch so the Type column reflects the new values
-                  // without a manual page reload.
-                  const { data } = await supabase!
-                    .from('products')
-                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
-                    .order('created_at', { ascending: false });
-                  if (data) {
-                    setCrawledProducts(data.map((p) => ({
-                      ...p,
-                      is_crawled: p.scrape_status === 'done' || p.scraped_at !== null,
-                    })) as CrawledProduct[]);
-                  }
-                }
-              }}
-              disabled={auditingTypes}
-              title="Walk every product and infer its type + subtype from its name (e.g. Shoes → Sandals)"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-                <path d="M9 11l3 3 8-8" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-              </svg>
-              {auditingTypes ? 'Auditing…' : 'Type audit'}
-            </button>
-            <button
-              className="admin-btn admin-btn-secondary"
-              onClick={async () => {
-                if (auditingGenders) return;
-                setAuditingGenders(true);
-                const result = await auditAllProductGenders();
-                setAuditingGenders(false);
-                showToast(
-                  `Gender audit - scanned ${result.scanned}, updated ${result.updated}, skipped ${result.skipped}${result.errors ? `, ${result.errors} errors` : ''}.`,
-                );
-                if (result.updated > 0) {
-                  const { data } = await supabase!
-                    .from('products')
-                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
-                    .order('created_at', { ascending: false });
-                  if (data) {
-                    setCrawledProducts(data.map((p) => ({
-                      ...p,
-                      is_crawled: p.scrape_status === 'done' || p.scraped_at !== null,
-                    })) as CrawledProduct[]);
-                  }
-                }
-              }}
-              disabled={auditingGenders}
-              title="Walk every product and infer gender from its name (women's, men's, unisex)"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-                <path d="M9 11l3 3 8-8" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-              </svg>
-              {auditingGenders ? 'Auditing…' : 'Gender audit'}
-            </button>
-            {/* Ingest measurements & fabrics — marks every visible product
-                (the currently-filtered list) as scrape_status=pending so
-                the Modal scraper agent re-extracts size_fit / materials_care
-                on its next cron pass. "Everything on here" is interpreted
-                as the filtered set the admin is looking at, not the
-                whole catalog. */}
-            <button
-              className="admin-btn admin-btn-secondary"
-              disabled={ingestingSpecs}
-              title="Queue every visible product for spec re-scrape (size_fit + materials_care)"
-              onClick={async () => {
-                if (ingestingSpecs) return;
-                const ids = filteredProductsList
-                  .map(p => p.id)
-                  .filter((id): id is string => typeof id === 'string' && id.length > 0);
-                if (ids.length === 0) {
-                  showToast('No syncable products in view — only crawled rows can be re-queued.');
-                  return;
-                }
-                setIngestingSpecs(true);
-                try {
-                  if (!supabase) throw new Error('Supabase not configured');
-                  // Update + select so we know exactly how many rows
-                  // RLS let through. A zero-row response means an admin
-                  // gate failed silently (the previous version threw a
-                  // bare PostgrestError that lost its message when the
-                  // catch tried err instanceof Error).
-                  const { data: updated, error } = await supabase
-                    .from('products')
-                    .update({ scrape_status: 'pending' })
-                    .in('id', ids)
-                    .select('id');
-                  if (error) {
-                    // PostgrestError is a plain object — pull the
-                    // human-readable bits out so the toast is actionable
-                    // ("permission denied for table products" etc.)
-                    // instead of "Unknown error".
-                    const parts = [error.message, error.details, error.hint, error.code]
-                      .filter((p): p is string => typeof p === 'string' && p.length > 0);
-                    throw new Error(parts.join(' · ') || 'Postgrest error');
-                  }
-                  const updatedIds = new Set((updated ?? []).map(r => r.id as string));
-                  if (updatedIds.size === 0) {
-                    throw new Error(
-                      'Update returned 0 rows — RLS likely blocked the write. Sign in as an admin user.',
+            {/* Every maintenance action lives under one Tools menu so the header
+                is the title, Tools and Add Products — not nine buttons. Running
+                actions keep their progress label inside the menu. */}
+            <div ref={toolsMenuRef} style={{ position: 'relative' }}>
+              <button
+                type="button"
+                className="admin-btn admin-btn-secondary"
+                onClick={() => setToolsMenuOpen(o => !o)}
+                aria-haspopup="menu"
+                aria-expanded={toolsMenuOpen}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></svg>
+                Tools
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
+              </button>
+              {toolsMenuOpen && (
+                <div role="menu" className="admin-tools-menu" onClick={() => setToolsMenuOpen(false)}>
+                <button
+                  className="admin-btn admin-btn-secondary"
+                  onClick={runPickPrimaryImages}
+                  disabled={pickingPrimary}
+                  title="Claude vision picks the cleanest solo-product image for every product without one (no human, no other products)."
+                >
+                  {pickingPrimary && primaryProgress ? (
+                    <>Picking {primaryProgress.done}/{primaryProgress.total}…</>
+                  ) : (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                      </svg>
+                      Pick primary images
+                    </>
+                  )}
+                </button>
+                <button
+                  className="admin-btn admin-btn-secondary"
+                  onClick={runCopywriter}
+                  disabled={copywriting}
+                  title="Claude rewrites product names and adds a hook - only runs on products without display_name"
+                >
+                  {copywriting && copywriteProgress ? (
+                    <>Rewriting {copywriteProgress.done}/{copywriteProgress.total}…</>
+                  ) : (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                        <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                      </svg>
+                      Rewrite with Claude
+                    </>
+                  )}
+                </button>
+                <button
+                  className="admin-btn admin-btn-secondary"
+                  onClick={refreshStaleProducts}
+                  disabled={refreshing}
+                  title="Re-check prices and availability for products not refreshed in 7+ days"
+                >
+                  {refreshing && refreshProgress ? (
+                    <>Refreshing {refreshProgress.done}/{refreshProgress.total}…</>
+                  ) : (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                        <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                      </svg>
+                      Refresh stale
+                    </>
+                  )}
+                </button>
+                <button
+                  className="admin-btn admin-btn-secondary"
+                  onClick={async () => {
+                    if (auditingTypes) return;
+                    setAuditingTypes(true);
+                    const result = await auditAllProductTypes();
+                    setAuditingTypes(false);
+                    showToast(
+                      `Audited ${result.scanned} products - updated ${result.updated}, skipped ${result.skipped}${result.errors ? `, ${result.errors} errors` : ''}.`,
                     );
-                  }
-                  setCrawledProducts(prev =>
-                    prev.map(r => updatedIds.has(r.id) ? { ...r, scrape_status: 'pending' } : r)
-                  );
-                  // Fire-and-forget kick to Modal so the first batch
-                  // starts now instead of waiting for the daily cron.
-                  // Modal's per-call batch cap (10) still applies; the
-                  // remaining queue clears on subsequent cron runs.
-                  void triggerScrapeFlush();
-                  showToast(
-                    `Queued ${updatedIds.size} product${updatedIds.size === 1 ? '' : 's'} for spec re-scrape. Modal is processing the first batch now.`,
-                  );
-                } catch (err) {
-                  // Cover both Error instances and bare strings / PostgrestError
-                  // objects that escaped the try block, so the toast is never
-                  // "Unknown error" — that swallowed too many real diagnostics.
-                  const msg = err instanceof Error
-                    ? err.message
-                    : (typeof err === 'string'
-                        ? err
-                        : (err && typeof err === 'object' && 'message' in err
-                            ? String((err as { message?: unknown }).message ?? 'Unknown error')
-                            : 'Unknown error'));
-                  showToast(`Ingest failed: ${msg}`);
-                } finally {
-                  setIngestingSpecs(false);
-                }
-              }}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="2" y="9" width="20" height="6" rx="1"/>
-                <line x1="6" y1="9" x2="6" y2="12"/>
-                <line x1="10" y1="9" x2="10" y2="13"/>
-                <line x1="14" y1="9" x2="14" y2="12"/>
-                <line x1="18" y1="9" x2="18" y2="13"/>
-              </svg>
-              {ingestingSpecs ? 'Queuing…' : 'Ingest measurements & fabrics'}
-            </button>
-            {/* Global settings — editable AI prompts (Polish Primary,
-                Primary Video). Persists to app_settings; edge functions
-                read it on their next run. */}
-            <button
-              className="admin-btn admin-btn-secondary"
-              onClick={() => setShowPromptSettings(true)}
-              title="Settings — edit the AI prompts used for Polish Primary and Primary Video"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
-              Settings
-            </button>
-            {/* Wrap Haiku — toggles the Haiku Context column between a single
-                ellipsised line and full multi-line wrapped text on every row. */}
-            <button
-              className={`admin-btn admin-btn-secondary${haikuWrap ? ' is-active' : ''}`}
-              onClick={() => setHaikuWrap(v => !v)}
-              title={haikuWrap ? 'Haiku context: wrapping — click for single line' : 'Haiku context: single line — click to wrap full text'}
-              aria-pressed={haikuWrap}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, ...(haikuWrap ? { background: '#eef2ff', borderColor: '#c7d2fe', color: '#4338ca' } : {}) }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <line x1="3" y1="6" x2="21" y2="6" />
-                <path d="M3 12h15a3 3 0 1 1 0 6h-4" />
-                <polyline points="16 16 14 18 16 20" />
-                <line x1="3" y1="18" x2="10" y2="18" />
-              </svg>
-              {haikuWrap ? 'Haiku: wrapped' : 'Wrap Haiku'}
-            </button>
+                    if (result.updated > 0) {
+                      // Refetch so the Type column reflects the new values
+                      // without a manual page reload.
+                      const { data } = await supabase!
+                        .from('products')
+                        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
+                        .order('created_at', { ascending: false });
+                      if (data) {
+                        setCrawledProducts(data.map((p) => ({
+                          ...p,
+                          is_crawled: p.scrape_status === 'done' || p.scraped_at !== null,
+                        })) as CrawledProduct[]);
+                      }
+                    }
+                  }}
+                  disabled={auditingTypes}
+                  title="Walk every product and infer its type + subtype from its name (e.g. Shoes → Sandals)"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                    <path d="M9 11l3 3 8-8" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                  </svg>
+                  {auditingTypes ? 'Auditing…' : 'Type audit'}
+                </button>
+                <button
+                  className="admin-btn admin-btn-secondary"
+                  onClick={async () => {
+                    if (auditingGenders) return;
+                    setAuditingGenders(true);
+                    const result = await auditAllProductGenders();
+                    setAuditingGenders(false);
+                    showToast(
+                      `Gender audit - scanned ${result.scanned}, updated ${result.updated}, skipped ${result.skipped}${result.errors ? `, ${result.errors} errors` : ''}.`,
+                    );
+                    if (result.updated > 0) {
+                      const { data } = await supabase!
+                        .from('products')
+                        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
+                        .order('created_at', { ascending: false });
+                      if (data) {
+                        setCrawledProducts(data.map((p) => ({
+                          ...p,
+                          is_crawled: p.scrape_status === 'done' || p.scraped_at !== null,
+                        })) as CrawledProduct[]);
+                      }
+                    }
+                  }}
+                  disabled={auditingGenders}
+                  title="Walk every product and infer gender from its name (women's, men's, unisex)"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                    <path d="M9 11l3 3 8-8" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                  </svg>
+                  {auditingGenders ? 'Auditing…' : 'Gender audit'}
+                </button>
+                {/* Ingest measurements & fabrics — marks every visible product
+                    (the currently-filtered list) as scrape_status=pending so
+                    the Modal scraper agent re-extracts size_fit / materials_care
+                    on its next cron pass. "Everything on here" is interpreted
+                    as the filtered set the admin is looking at, not the
+                    whole catalog. */}
+                <button
+                  className="admin-btn admin-btn-secondary"
+                  disabled={ingestingSpecs}
+                  title="Queue every visible product for spec re-scrape (size_fit + materials_care)"
+                  onClick={async () => {
+                    if (ingestingSpecs) return;
+                    const ids = filteredProductsList
+                      .map(p => p.id)
+                      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+                    if (ids.length === 0) {
+                      showToast('No syncable products in view — only crawled rows can be re-queued.');
+                      return;
+                    }
+                    setIngestingSpecs(true);
+                    try {
+                      if (!supabase) throw new Error('Supabase not configured');
+                      // Update + select so we know exactly how many rows
+                      // RLS let through. A zero-row response means an admin
+                      // gate failed silently (the previous version threw a
+                      // bare PostgrestError that lost its message when the
+                      // catch tried err instanceof Error).
+                      const { data: updated, error } = await supabase
+                        .from('products')
+                        .update({ scrape_status: 'pending' })
+                        .in('id', ids)
+                        .select('id');
+                      if (error) {
+                        // PostgrestError is a plain object — pull the
+                        // human-readable bits out so the toast is actionable
+                        // ("permission denied for table products" etc.)
+                        // instead of "Unknown error".
+                        const parts = [error.message, error.details, error.hint, error.code]
+                          .filter((p): p is string => typeof p === 'string' && p.length > 0);
+                        throw new Error(parts.join(' · ') || 'Postgrest error');
+                      }
+                      const updatedIds = new Set((updated ?? []).map(r => r.id as string));
+                      if (updatedIds.size === 0) {
+                        throw new Error(
+                          'Update returned 0 rows — RLS likely blocked the write. Sign in as an admin user.',
+                        );
+                      }
+                      setCrawledProducts(prev =>
+                        prev.map(r => updatedIds.has(r.id) ? { ...r, scrape_status: 'pending' } : r)
+                      );
+                      // Fire-and-forget kick to Modal so the first batch
+                      // starts now instead of waiting for the daily cron.
+                      // Modal's per-call batch cap (10) still applies; the
+                      // remaining queue clears on subsequent cron runs.
+                      void triggerScrapeFlush();
+                      showToast(
+                        `Queued ${updatedIds.size} product${updatedIds.size === 1 ? '' : 's'} for spec re-scrape. Modal is processing the first batch now.`,
+                      );
+                    } catch (err) {
+                      // Cover both Error instances and bare strings / PostgrestError
+                      // objects that escaped the try block, so the toast is never
+                      // "Unknown error" — that swallowed too many real diagnostics.
+                      const msg = err instanceof Error
+                        ? err.message
+                        : (typeof err === 'string'
+                            ? err
+                            : (err && typeof err === 'object' && 'message' in err
+                                ? String((err as { message?: unknown }).message ?? 'Unknown error')
+                                : 'Unknown error'));
+                      showToast(`Ingest failed: ${msg}`);
+                    } finally {
+                      setIngestingSpecs(false);
+                    }
+                  }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="2" y="9" width="20" height="6" rx="1"/>
+                    <line x1="6" y1="9" x2="6" y2="12"/>
+                    <line x1="10" y1="9" x2="10" y2="13"/>
+                    <line x1="14" y1="9" x2="14" y2="12"/>
+                    <line x1="18" y1="9" x2="18" y2="13"/>
+                  </svg>
+                  {ingestingSpecs ? 'Queuing…' : 'Ingest measurements & fabrics'}
+                </button>
+                {/* Global settings — editable AI prompts (Polish Primary,
+                    Primary Video). Persists to app_settings; edge functions
+                    read it on their next run. */}
+                <button
+                  className="admin-btn admin-btn-secondary"
+                  onClick={() => setShowPromptSettings(true)}
+                  title="Settings — edit the AI prompts used for Polish Primary and Primary Video"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
+                  Settings
+                </button>
+                </div>
+              )}
+            </div>
             <div ref={addMenuRef} style={{ position: 'relative' }}>
               <button
                 className="admin-btn admin-btn-primary"
@@ -4505,6 +4522,19 @@ export default function AdminData() {
                 ).length}
               </span>
             </button>
+            {/* Gender — composes with whichever bucket is selected. */}
+            <span className="admin-tab-group" style={{ marginLeft: 8 }} role="group" aria-label="Gender">
+              {([['all', 'All'], ['male', 'Men'], ['female', 'Women'], ['unisex', 'Unisex']] as Array<[typeof productGender, string]>).map(([g, label]) => (
+                <button
+                  key={g}
+                  type="button"
+                  className={`admin-tab ${productGender === g ? 'active' : ''}`}
+                  onClick={() => setProductGender(g)}
+                >
+                  {label}
+                </button>
+              ))}
+            </span>
             <button
               className={`admin-tab ${productFilter === 'no-creative' ? 'active' : ''}`}
               onClick={() => setProductFilter('no-creative')}
@@ -5431,17 +5461,11 @@ export default function AdminData() {
                     }}
                   />
                 </th>
-                <th style={{ textAlign: 'left', minWidth: 56 }} title="Vision-picked solo-product image. Click any photo in the expanded row to override.">Primary</th>
-                <th style={{ textAlign: 'left' }}>Primary Video</th>
-                <SortableTh label="Brand" sortKey="brand" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <SortableTh label="Type · Subtype" sortKey="type" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <SortableTh label="Gender" sortKey="gender" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <th style={{ minWidth: 140 }}>Fabric</th>
-                <th style={{ minWidth: 200 }} title="Claude Haiku's read of the primary image — what the item actually is. Feeds type governance.">Haiku Context</th>
+                <th style={{ textAlign: 'left', minWidth: 96 }} title="Primary image (vision-picked) and primary video. Click either to expand the row.">Media</th>
                 <SortableTh label="Product" sortKey="name" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <th style={{ minWidth: 110 }} title="ASIN (Amazon) or UPC/EAN/GTIN — captured from the page or JSON-LD when available; blank when the site doesn't expose one.">Barcode</th>
-                <th style={{ textAlign: 'center' }} title="When on, this product is live — shown on the home feed AND in search / catalog listings. When off, it's fully hidden from the platform (but stays in this admin table).">Active</th>
-                <th style={{ textAlign: 'center' }} title="Flagged elite in /admin/creative - curated onto the feed and the deck v1.1 background">Elite</th>
+                <SortableTh label="Type · Subtype" sortKey="type" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <th style={{ textAlign: 'center' }} title="Gender, fabric, size & fit, materials, Haiku read, barcode — hover the icon">Details</th>
+                <th style={{ textAlign: 'center' }} title="Live on the feed and in search. ★ = flagged elite in /admin/creative">Live</th>
                 <SortableTh label="Price" sortKey="price" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 {!statsExpanded && (
                   <th
@@ -5470,23 +5494,7 @@ export default function AdminData() {
                     <SortableTh className="admin-stats-col" label="Clicks" sortKey="clicks" currentSort={productTable.sort} onSort={productTable.handleSort} />
                   </>
                 )}
-                {/* Date Added is now its own untinted column, sitting
-                    next to Method instead of inside the Stats group -
-                    Date is metadata, not engagement, so it shouldn't
-                    share the indigo Stats tint. */}
-                <SortableTh label="Date Added" sortKey="created_at" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <SortableTh label="Method" sortKey="source" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <th>Tags</th>
-                <th>Links</th>
-                <th title="Measurements">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="Measurements">
-                    <rect x="2" y="9" width="20" height="6" rx="1"/>
-                    <line x1="6"  y1="9"  x2="6"  y2="12"/>
-                    <line x1="10" y1="9"  x2="10" y2="13"/>
-                    <line x1="14" y1="9"  x2="14" y2="12"/>
-                    <line x1="18" y1="9"  x2="18" y2="13"/>
-                  </svg>
-                </th>
+                <SortableTh label="Added" sortKey="created_at" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th></th>
               </tr>
             </thead>
@@ -5520,7 +5528,7 @@ export default function AdminData() {
                       animation: 'pendingShimmer 1.4s ease-in-out infinite',
                     }} />
                   </td>
-                  <td colSpan={20} style={{ padding: '8px 12px' }}>
+                  <td colSpan={15} style={{ padding: '8px 12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span style={{ fontSize: 11, fontWeight: 700, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
                         Scraping
@@ -5619,6 +5627,7 @@ export default function AdminData() {
                       Empty box when the picker hasn't run yet, with
                       a subtle hint to expand. */}
                   <td onClick={(e) => e.stopPropagation()}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     {(() => {
                       const primary = (p as { primary_image_url?: string | null }).primary_image_url;
                       const polished = (p as { primary_image_polished?: boolean | null }).primary_image_polished === true;
@@ -5705,8 +5714,6 @@ export default function AdminData() {
                         </button>
                       );
                     })()}
-                  </td>
-                  <td onClick={(e) => e.stopPropagation()}>
                     {(() => {
                       const primaryVideoUrl   = (p as { primary_video_url?: string | null }).primary_video_url ?? null;
                       const primaryImageUrl   = (p as { primary_image_url?: string | null }).primary_image_url ?? null;
@@ -5837,117 +5844,10 @@ export default function AdminData() {
                         </button>
                       );
                     })()}
-                  </td>
-                  <td style={{ textAlign: 'left', fontSize: 12, color: '#475569' }}>
-                    {p.brand ? (
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); navigate(`/admin/brand/${encodeURIComponent(p.brand!)}`); }}
-                        title={`Open ${p.brand} brand page`}
-                        style={{
-                          background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                          color: '#2563eb', fontSize: 12, fontWeight: 500, textAlign: 'left',
-                          textDecoration: 'none',
-                        }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.textDecoration = 'underline'; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.textDecoration = 'none'; }}
-                      >
-                        {p.brand}
-                      </button>
-                    ) : (
-                      <span style={{ color: '#94a3b8' }}>—</span>
-                    )}
-                  </td>
-                  <td style={{ textAlign: 'left', fontSize: 12 }} onClick={e => e.stopPropagation()}>
-                    {/* Consolidated Type · Subtype cell — the live connection
-                        to /admin/governance/types. Click for the derivation
-                        map (what's stored vs. what the name / image infer) and
-                        to change the type/subtype. Assigning a type writes the
-                        same type/gender/type_path cascade the brain writes. */}
-                    <GovernanceTypeCell
-                      productId={p.id ?? ''}
-                      type={p.type ?? null}
-                      subtype={p.subtype ?? null}
-                      name={p.name ?? null}
-                      gender={p.gender ?? null}
-                      haikuContext={(p as { haiku_context?: string | null }).haiku_context ?? null}
-                      showToast={showToast}
-                      onAssigned={(patch) => {
-                        setCrawledProducts(prev => prev.map(r =>
-                          r.id === p.id ? { ...r, type: patch.type, gender: patch.gender } : r));
-                      }}
-                      onAssignedSubtype={(st) => {
-                        setCrawledProducts(prev => prev.map(r =>
-                          r.id === p.id ? { ...r, subtype: st } : r));
-                      }}
-                    />
-                  </td>
-                  <td style={{ textAlign: 'left', fontSize: 12 }}>
-                    {p.gender === 'male' ? (
-                      <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, background: '#dbeafe', color: '#1d4ed8', fontWeight: 500, fontSize: 11 }}>Male</span>
-                    ) : p.gender === 'female' ? (
-                      <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, background: '#fce7f3', color: '#be185d', fontWeight: 500, fontSize: 11 }}>Female</span>
-                    ) : p.gender === 'unisex' ? (
-                      <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontWeight: 500, fontSize: 11 }}>Unisex</span>
-                    ) : (
-                      <span style={{ color: '#cbd5e1' }}> - </span>
-                    )}
-                  </td>
-                  {/* Fabric — derived from materials_care for inline display.
-                      The full hover panel is still on the measurements icon
-                      column further right; this column gives a glanceable
-                      composition string. */}
-                  <td style={{ fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.materials_care ?? undefined}>
-                    {extractFabric(p.materials_care) ?? <span style={{ color: '#cbd5e1' }}>—</span>}
-                  </td>
-                  {/* Haiku context — the vision model's read of the primary
-                      image, regenerated whenever a new primary is picked
-                      (products_haiku_context trigger → haiku-context fn) or
-                      on demand via the ↻ button. "Wrap Haiku" (toolbar) toggles
-                      full multi-line text; otherwise single-line + ellipsis. */}
-                  <td style={{ fontSize: 11.5, color: '#52525b', maxWidth: haikuWrap ? 300 : 240, verticalAlign: 'top' }}
-                    title={(p as { haiku_context?: string | null }).haiku_context ?? undefined}>
-                    {(() => {
-                      const ctx = (p as { haiku_context?: string | null }).haiku_context ?? null;
-                      const isRegen = !!p.id && regeneratingHaiku.has(p.id);
-                      return (
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                          <span style={{
-                            flex: 1, minWidth: 0,
-                            ...(haikuWrap
-                              ? { whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.35 }
-                              : { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }),
-                          }}>
-                            {isRegen
-                              ? <em style={{ color: '#7c3aed' }}>regenerating…</em>
-                              : (ctx ?? <span style={{ color: '#cbd5e1' }}>pending…</span>)}
-                          </span>
-                          {p.id && (
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); void regenerateHaiku(p.id!); }}
-                              disabled={isRegen}
-                              title="Regenerate this product's Haiku context from its image"
-                              aria-label="Regenerate Haiku context"
-                              style={{
-                                flexShrink: 0, width: 22, height: 22, padding: 0, borderRadius: 6,
-                                border: '1px solid #e5e7eb', background: '#fff', cursor: isRegen ? 'default' : 'pointer',
-                                color: '#64748b', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                              }}
-                            >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                                style={isRegen ? { animation: 'admin-spin 0.9s linear infinite' } : undefined} aria-hidden="true">
-                                <polyline points="23 4 23 10 17 10" />
-                                <polyline points="1 20 1 14 7 14" />
-                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })()}
+                    </div>
                   </td>
                   <td style={{ textAlign: 'left' }} onClick={(e) => e.stopPropagation()}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 160 }}>
                     {p.url ? (
                       <a
                         href={p.url}
@@ -5976,15 +5876,69 @@ export default function AdminData() {
                     ) : (
                       <div style={{ fontWeight: 600, fontSize: 12 }}>{p.name}</div>
                     )}
+                      <div style={{ fontSize: 11.5, color: '#475569' }}>
+                    {p.brand ? (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/admin/brand/${encodeURIComponent(p.brand!)}`); }}
+                        title={`Open ${p.brand} brand page`}
+                        style={{
+                          background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                          color: '#2563eb', fontSize: 12, fontWeight: 500, textAlign: 'left',
+                          textDecoration: 'none',
+                        }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.textDecoration = 'underline'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.textDecoration = 'none'; }}
+                      >
+                        {p.brand}
+                      </button>
+                    ) : (
+                      <span style={{ color: '#94a3b8' }}>—</span>
+                    )}
+                      </div>
+                    </div>
                   </td>
-                  {/* Barcode — ASIN / UPC / EAN / GTIN captured by the scraper when
-                      the site exposes it (most DTC/brand sites don't). Monospace;
-                      type shown on hover. */}
-                  <td style={{ fontSize: 11.5, color: '#52525b', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'nowrap' }}
-                    title={(p as { barcode_type?: string | null }).barcode_type ?? undefined}>
-                    {(p as { barcode?: string | null }).barcode ?? <span style={{ color: '#cbd5e1' }}>—</span>}
+                  <td style={{ textAlign: 'left', fontSize: 12 }} onClick={e => e.stopPropagation()}>
+                    {/* Consolidated Type · Subtype cell — the live connection
+                        to /admin/governance/types. Click for the derivation
+                        map (what's stored vs. what the name / image infer) and
+                        to change the type/subtype. Assigning a type writes the
+                        same type/gender/type_path cascade the brain writes. */}
+                    <GovernanceTypeCell
+                      productId={p.id ?? ''}
+                      type={p.type ?? null}
+                      subtype={p.subtype ?? null}
+                      name={p.name ?? null}
+                      gender={p.gender ?? null}
+                      haikuContext={(p as { haiku_context?: string | null }).haiku_context ?? null}
+                      showToast={showToast}
+                      onAssigned={(patch) => {
+                        setCrawledProducts(prev => prev.map(r =>
+                          r.id === p.id ? { ...r, type: patch.type, gender: patch.gender } : r));
+                      }}
+                      onAssignedSubtype={(st) => {
+                        setCrawledProducts(prev => prev.map(r =>
+                          r.id === p.id ? { ...r, subtype: st } : r));
+                      }}
+                    />
                   </td>
                   <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                    {/* Gender, fabric, size & fit, materials, Haiku read and barcode
+                        all live behind one hover icon (they were five columns). */}
+                    <ProductDetailsHover
+                      gender={p.gender ?? null}
+                      fabric={extractFabric(p.materials_care)}
+                      sizeFit={p.size_fit}
+                      materialsCare={p.materials_care}
+                      haiku={(p as { haiku_context?: string | null }).haiku_context ?? null}
+                      barcode={(p as { barcode?: string | null }).barcode ?? null}
+                      barcodeType={(p as { barcode_type?: string | null }).barcode_type ?? null}
+                      regenerating={!!p.id && regeneratingHaiku.has(p.id)}
+                      onRegenerate={p.id ? () => { void regenerateHaiku(p.id!); } : undefined}
+                    />
+                  </td>
+                  <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                     {p.id ? (
                       <AdminToggle
                         on={(p as any).is_active !== false}
@@ -5993,29 +5947,10 @@ export default function AdminData() {
                     ) : (
                       <span style={{ fontSize: 11, color: '#cbd5e1' }}> - </span>
                     )}
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    {(p as any).is_elite ? (
-                      <span
-                        title="Elite - flag the creative in /admin/creative to toggle"
-                        style={{
-                          display: 'inline-block',
-                          padding: '2px 8px',
-                          borderRadius: 4,
-                          fontSize: 10,
-                          fontWeight: 700,
-                          letterSpacing: '0.5px',
-                          textTransform: 'uppercase',
-                          background: 'rgba(234,179,8,0.15)',
-                          color: '#b88600',
-                          border: '1px solid rgba(234,179,8,0.4)',
-                        }}
-                      >
-                        ★ Elite
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: 11, color: '#cbd5e1' }}> - </span>
-                    )}
+                      {(p as any).is_elite && (
+                        <span title="Elite - flag the creative in /admin/creative to toggle" style={{ fontSize: 12, color: '#b88600' }} aria-label="Elite">★</span>
+                      )}
+                    </div>
                   </td>
                   <td style={{ fontWeight: 600 }}>{p.price}</td>
                   {!statsExpanded && (
@@ -6045,9 +5980,9 @@ export default function AdminData() {
                     </>
                   )}
                   <td className="admin-cell-muted" style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
-                    {formatDateAdded(p.created_at)}
-                  </td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <span>{formatDateAdded(p.created_at)}</span>
+                      <span>
                     {p.source ? (
                       <span style={{
                         display: 'inline-block',
@@ -6071,8 +6006,11 @@ export default function AdminData() {
                     ) : (
                       <span style={{ fontSize: 11, color: '#94a3b8' }}> - </span>
                     )}
+                      </span>
+                    </div>
                   </td>
-                  <td onClick={(e) => e.stopPropagation()}>
+                  <td onClick={(e) => e.stopPropagation()} style={{ whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <button
                       className="admin-btn admin-btn-secondary"
                       style={{ fontSize: 11, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
@@ -6093,8 +6031,6 @@ export default function AdminData() {
                         <polyline points="6 9 12 15 18 9" />
                       </svg>
                     </button>
-                  </td>
-                  <td onClick={(e) => e.stopPropagation()}>
                     <button
                       className="admin-btn admin-btn-secondary"
                       style={{ fontSize: 11, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
@@ -6131,43 +6067,6 @@ export default function AdminData() {
                         </svg>
                       </button>
                     )}
-                  </td>
-                  <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                    {(() => {
-                      const hasFit  = !!(p.size_fit && p.size_fit.trim());
-                      const hasCare = !!(p.materials_care && p.materials_care.trim());
-                      const hasAny  = hasFit || hasCare;
-                      return (
-                        <div
-                          className={`admin-measurements${hasAny ? ' has-data' : ''}`}
-                          aria-label={hasAny ? 'View measurements' : 'No measurements available'}
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <rect x="2" y="9" width="20" height="6" rx="1"/>
-                            <line x1="6"  y1="9"  x2="6"  y2="12"/>
-                            <line x1="10" y1="9"  x2="10" y2="13"/>
-                            <line x1="14" y1="9"  x2="14" y2="12"/>
-                            <line x1="18" y1="9"  x2="18" y2="13"/>
-                          </svg>
-                          <div className="admin-measurements-tooltip" role="tooltip">
-                            <div className="admin-measurements-row">
-                              <div className="admin-measurements-label">Size &amp; fit</div>
-                              <div className={`admin-measurements-value${hasFit ? '' : ' is-empty'}`}>
-                                {hasFit ? p.size_fit : 'Not available'}
-                              </div>
-                            </div>
-                            <div className="admin-measurements-row">
-                              <div className="admin-measurements-label">Materials &amp; care</div>
-                              <div className={`admin-measurements-value${hasCare ? '' : ' is-empty'}`}>
-                                {hasCare ? p.materials_care : 'Not available'}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </td>
-                  <td>
                     {productFilter === 'soft-deleted' ? (
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button
@@ -6281,11 +6180,12 @@ export default function AdminData() {
                       </svg>
                     </button>
                     )}
+                    </div>
                   </td>
                 </tr>
                 {detailOpen && (
                   <tr className="admin-product-detail-row">
-                    <td colSpan={18} style={{ padding: 0, background: '#fafbff' }}>
+                    <td colSpan={15} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: (tagsOpen || linksOpen) ? undefined : '1px solid #e5e7eb' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 160px) minmax(120px, 160px) minmax(120px, 160px) 1fr 1fr', gap: 24 }}>
                           {/* Primary preview pinned to the far left so
@@ -7241,7 +7141,7 @@ export default function AdminData() {
                 )}
                 {tagsOpen && (
                   <tr className="admin-product-tags-row">
-                    <td colSpan={18} style={{ padding: 0, background: '#fafbff' }}>
+                    <td colSpan={15} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '12px 20px', borderTop: '1px solid #e5e7eb', borderBottom: linksOpen ? undefined : '1px solid #e5e7eb' }}>
                         <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
                           Tags
@@ -7266,7 +7166,7 @@ export default function AdminData() {
                 )}
                 {linksOpen && (
                   <tr className="admin-product-links-row">
-                    <td colSpan={18} style={{ padding: 0, background: '#fafbff' }}>
+                    <td colSpan={15} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
                           <div>
@@ -7422,7 +7322,7 @@ export default function AdminData() {
               })}
               {hasMore && (
                 <tr ref={sentinelRef}>
-                  <td colSpan={20} style={{ padding: '16px 12px' }}>
+                  <td colSpan={15} style={{ padding: '16px 12px' }}>
                     <div
                       role="status"
                       aria-live="polite"

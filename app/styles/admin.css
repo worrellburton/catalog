@@ -7147,3 +7147,106 @@ html.eq-page .gen-queue-host { display: none; }
 .admin-cell-sub { font-size: 12px; color: #888; margin-top: 2px; }
 .admin-dark .admin-cell-sub { color: rgba(255,255,255,0.5); }
 .admin-loading { padding: 24px; color: #888; }
+
+/* Products tab — Tools menu (the maintenance actions, folded from a row of
+   nine buttons into one dropdown) and the per-row Details hover icon. */
+.admin-tools-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 280px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  padding: 4px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.admin-tools-menu > .admin-btn {
+  justify-content: flex-start;
+  width: 100%;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13px;
+  text-align: left;
+}
+.admin-tools-menu > .admin-btn:hover:not(:disabled) { background: #f3f4f6; }
+.admin-dark .admin-tools-menu { background: #1c1c1e; border-color: rgba(255, 255, 255, 0.1); }
+.admin-dark .admin-tools-menu > .admin-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.06); }
+
+.admin-detail-hover {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: #cbd5e1;
+  cursor: help;
+  outline: none;
+}
+.admin-detail-hover.has-data { color: #4f46e5; background: rgba(79, 70, 229, 0.08); }
+.admin-detail-hover-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  width: 320px;
+  padding: 12px 14px;
+  background: #1f2937;
+  color: #f9fafb;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+  white-space: normal;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.admin-detail-hover:hover .admin-detail-hover-panel,
+.admin-detail-hover:focus-within .admin-detail-hover-panel,
+.admin-detail-hover:focus .admin-detail-hover-panel {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.admin-detail-hover-row + .admin-detail-hover-row {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.admin-detail-hover-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 2px;
+}
+.admin-detail-hover-value { color: #f9fafb; }
+.admin-detail-hover-value.is-empty { color: rgba(255, 255, 255, 0.35); font-style: italic; }
+.admin-detail-hover-regen {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e5e7eb;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.admin-detail-hover-regen:disabled { cursor: default; opacity: 0.6; }
