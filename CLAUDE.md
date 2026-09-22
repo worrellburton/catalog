@@ -249,6 +249,9 @@ Where it's applied (use these as reference implementations):
 | Product page info column (the original) | `.pd-info--catalog` in `app/styles/product-page.css`, markup in `ProductPage.tsx` |
 | Look page column: desktop head row (curator · posted date · product count · back to catalog), `PRODUCTS` tab, hairline product rows, serif commentary, catalog order line + Comments link | `.look-catalog-head`, `.look-tabs`, `.product-card`, `.look-creator-about`, `.look-about-actions` in `app/styles/look-overlay.css` |
 | Creator page header: hairline avatar, `CURATED BY`, serif name, outlined Follow / quiet `--quiet` state, counts, tab eyebrows | `.creator-hero*`, `.creator-follow-btn`, `.creator-nav*` in `app/styles/creator-page.css` |
+| Profile page: underline inputs and selects, eyebrow labels, gender as underlined eyebrow options, outlined Save | `app/styles/profile-page.css` |
+| Directory pages (/creators, /brands, /products, /catalogs) and the Products mega menu | `app/styles/directory.css`, `app/styles/header-nav.css` |
+| Activity page: serif figures in hairline columns, eyebrow section heads, hairline rows for looks / ledger / conversations, chips as the one rounded element | `app/styles/activity-page.css` |
 
 When applying it to another surface, consume the `--pc-*` tokens (don't fork
 them) and drop that surface's `.light-mode` colour overrides — the tokens
