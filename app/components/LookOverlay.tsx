@@ -107,6 +107,10 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // parent can pop the Catalog search bar exactly when the shopper reaches
   // the daily feed — and hide it again when they scroll back above.
   const dailyFeedSentinelRef = useRef<HTMLDivElement | null>(null);
+  // Rails (+ nested daily feed) mount one frame after the hero paints — see
+  // the effect near the byte-prewarm below. Declared up here because the
+  // daily-feed sentinel effect depends on it.
+  const [railsReady, setRailsReady] = useState(false);
   // Tracked separately so the nested feed re-binds its IntersectionObserver
   // root once the scroller mounts (refs alone don't trigger re-renders).
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
@@ -217,7 +221,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       if (raf) cancelAnimationFrame(raf);
       onDailyFeedBar(false, false);
     };
-  }, [scrollEl, onDailyFeedBar]);
+  }, [scrollEl, onDailyFeedBar, railsReady]); // railsReady: the sentinel mounts with the rails
 
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
   const [lookBookmarked, setLookBookmarked] = useState(bookmarks.isLookBookmarked(look.id));
@@ -366,9 +370,31 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     // prewarm (it would fetch an MP4 the hero won't play). In 'mp4' pipeline
     // mode activeHlsUrl is undefined, so the byte prewarm always runs.
     if (activeHlsUrl) return;
-    if (heroVideoUrl) prefetchVideoBytes(heroVideoUrl);
-    if (fullVideoUrl && fullVideoUrl !== heroVideoUrl) prefetchVideoBytes(fullVideoUrl);
+    // Deferred past the open: the hero's own <video> is already buffering,
+    // and two full-file GETs on the open frame contended with it (and the
+    // rail posters) for bandwidth and main-thread body draining.
+    const t = window.setTimeout(() => {
+      if (heroVideoUrl) prefetchVideoBytes(heroVideoUrl);
+      if (fullVideoUrl && fullVideoUrl !== heroVideoUrl) prefetchVideoBytes(fullVideoUrl);
+    }, 1200);
+    return () => window.clearTimeout(t);
   }, [heroVideoUrl, fullVideoUrl, activeHlsUrl]);
+
+  // The four rails + nested daily feed (~57 cards, each with an eager
+  // poster, two observers and half a dozen store subscriptions) used to
+  // mount synchronously in the open commit — all below the fold on a phone.
+  // Mount them one frame after the hero has painted so the open itself
+  // stays a single cheap commit.
+  useEffect(() => {
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setRailsReady(true));
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, []);
 
   // Pause background feed cards while the overlay is open so they don't
   // compete for bandwidth with the hero video. Resume on unmount.
@@ -377,7 +403,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     trailMgr?.suspendFeed(trailId);
     // Reclaim decoders held by the now-covered feed's parked clips.
     trailMgr?.pruneIdle();
-    return () => { trailMgr?.resumeFeed(); };
+    return () => { trailMgr?.resumeFeed(trailId); };
   }, [trailMgr, trailId]);
 
   // Resolves to the shopper's active gender preference ('all'|'men'|'women').
@@ -1310,6 +1336,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
         {/* "Similar looks" section — admin-controllable via /admin/pages
             (page=looks, key=similar). Shows garment-matched looks, with a
             Popular fallback when nothing matches. */}
+        {railsReady && (<>
         {similarEnabled && feedSections.looksLikeThis.length > 0 && (
           <div className="look-feed-section">
             <h3 className="look-feed-heading">
@@ -1327,7 +1354,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               )}
             </h3>
             <div className="look-feed-grid">
-              {feedSections.looksLikeThis.slice(0, similarLimit).map((fl, i) => (
+              {feedSections.looksLikeThis.slice(0, similarLimit).map((fl) => (
                 <CreativeCardV2
                   key={`like-${fl.id}`}
                   slotId={`${directorScope}:like-${fl.id}`}
@@ -1335,7 +1362,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   className="look-card"
                   onOpenLook={handleFeedLookClick}
                   onOpenCreator={onOpenCreator}
-                  priority={i < 2}
                 />
               ))}
             </div>
@@ -1429,6 +1455,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
             bookmarks={bookmarks}
           />
         </div>
+        </>)}
       </div>
       {simDebug.open && (
         <SimilarDebugModal

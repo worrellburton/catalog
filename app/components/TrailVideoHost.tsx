@@ -149,7 +149,10 @@ interface TrailVideoManager {
    *  overlay opens so background feed cards stop competing for bandwidth. */
   suspendFeed: (heroTrailId: string) => void;
   /** Resume all paused in-slot videos. Call when the overlay closes. */
-  resumeFeed: () => void;
+  /** Pass the same id given to suspendFeed. Overlays stack (product over
+   *  look): resuming the top one re-applies the one beneath instead of
+   *  waking every clip under BOTH. */
+  resumeFeed: (heroTrailId?: string) => void;
   /** Accept an externally-owned (e.g. director-managed) <video> element
    *  into the pool under `id`. The element keeps its current src and
    *  currentTime so attach() can hand it to the overlay hero immediately
@@ -476,18 +479,44 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
   // While suspendFeed is in force, only the hero may play — the watchdog
   // below must not fight that deliberate pause.
   const suspendedHeroRef = useRef<string | null>(null);
+  // Overlays stack (product over look over feed). Each pushes its hero id;
+  // resuming pops it and RE-APPLIES the suspension beneath, so closing a
+  // product over a look no longer wakes every clip under the look too.
+  const suspendStackRef = useRef<string[]>([]);
 
-  const suspendFeed = useCallback((heroTrailId: string) => {
+  const applySuspend = useCallback((heroTrailId: string) => {
     suspendedHeroRef.current = heroTrailId;
     const offscreen = poolRef.current;
     for (const [id, { el }] of elementsRef.current) {
-      if (id === heroTrailId) continue;
       if (!el.parentElement || el.parentElement === offscreen) continue;
+      if (id === heroTrailId) {
+        if (el.paused) void el.play().catch(() => {});
+        continue;
+      }
       try { el.pause(); } catch {}
     }
   }, []);
 
-  const resumeFeed = useCallback(() => {
+  const suspendFeed = useCallback((heroTrailId: string) => {
+    const stack = suspendStackRef.current;
+    const i = stack.indexOf(heroTrailId);
+    if (i >= 0) stack.splice(i, 1);
+    stack.push(heroTrailId);
+    applySuspend(heroTrailId);
+  }, [applySuspend]);
+
+  const resumeFeed = useCallback((heroTrailId?: string) => {
+    const stack = suspendStackRef.current;
+    if (heroTrailId === undefined) stack.pop();
+    else {
+      const i = stack.lastIndexOf(heroTrailId);
+      if (i >= 0) stack.splice(i, 1);
+    }
+    const top = stack[stack.length - 1];
+    if (top !== undefined) {
+      applySuspend(top);
+      return;
+    }
     suspendedHeroRef.current = null;
     const offscreen = poolRef.current;
     for (const { el } of elementsRef.current.values()) {
@@ -495,7 +524,7 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
       if (!el.paused) continue;
       void el.play().catch(() => {});
     }
-  }, []);
+  }, [applySuspend]);
 
   // Stall watchdog — same guarantee the playback director gives feed
   // cards, extended to every trail-managed video (overlay heroes, legacy
