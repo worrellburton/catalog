@@ -1,33 +1,37 @@
 // imports
 import { useEffect, useMemo, useState } from 'react';
 import DirectoryPage from './DirectoryPage';
+import DirectoryHero, { type HeroSlide } from './DirectoryHero';
 import GenderLens from './GenderLens';
+import ProductGrid from './ProductGrid';
 import TypeIcon from './TypeIcon';
-import { listDirectoryTypes, type DirectoryGender, type DirectoryType } from '~/services/directory';
+import {
+  listDirectoryTypes,
+  listProducts,
+  type DirectoryGender,
+  type DirectoryType,
+  type DirectoryTypeProduct,
+} from '~/services/directory';
+import type { Product } from '~/data/looks';
 
 // types
 interface ProductsDirectoryProps {
   gender: DirectoryGender;
   onChangeGender: (g: DirectoryGender) => void;
   onOpenType: (type: DirectoryType) => void;
+  onOpenProduct: (product: Product) => void;
   onClose: () => void;
 }
 
-// helpers
-export function groupByDepartment(types: DirectoryType[], lens: DirectoryGender): Array<{ department: string; types: DirectoryType[] }> {
-  const groups: Array<{ department: string; types: DirectoryType[] }> = [];
-  for (const t of types) {
-    if (t.counts[lens] === 0) continue;
-    let g = groups.find(x => x.department === t.department);
-    if (!g) { g = { department: t.department, types: [] }; groups.push(g); }
-    g.types.push(t);
-  }
-  return groups;
-}
-
 // main logic
-export default function ProductsDirectory({ gender, onChangeGender, onOpenType, onClose }: ProductsDirectoryProps) {
+/**
+ * /products — every product in the catalog under the gender lens, with a
+ * row of type chips to narrow into /products/<type>. The hover mega menu is
+ * the directory; this is the whole shelf.
+ */
+export default function ProductsDirectory({ gender, onChangeGender, onOpenType, onOpenProduct, onClose }: ProductsDirectoryProps) {
   const [types, setTypes] = useState<DirectoryType[] | null>(null);
+  const [products, setProducts] = useState<DirectoryTypeProduct[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,40 +39,53 @@ export default function ProductsDirectory({ gender, onChangeGender, onOpenType, 
     return () => { cancelled = true; };
   }, []);
 
-  const groups = useMemo(() => groupByDepartment(types ?? [], gender), [types, gender]);
-  const total = useMemo(() => (types ?? []).reduce((n, t) => n + t.counts[gender], 0), [types, gender]);
-  const lensCounts = useMemo(() => ({
-    all: (types ?? []).reduce((n, t) => n + t.counts.all, 0),
-    women: (types ?? []).reduce((n, t) => n + t.counts.women, 0),
-    men: (types ?? []).reduce((n, t) => n + t.counts.men, 0),
-  }), [types]);
+  useEffect(() => {
+    let cancelled = false;
+    setProducts(null);
+    listProducts(gender).then(p => { if (!cancelled) setProducts(p); });
+    return () => { cancelled = true; };
+  }, [gender]);
+
+  const chips = useMemo(
+    () => (types ?? []).filter(t => t.counts[gender] > 0).sort((a, b) => b.counts[gender] - a.counts[gender]),
+    [types, gender],
+  );
+  const lensCounts = useMemo(() => types ? {
+    all: types.reduce((n, t) => n + t.counts.all, 0),
+    women: types.reduce((n, t) => n + t.counts.women, 0),
+    men: types.reduce((n, t) => n + t.counts.men, 0),
+  } : undefined, [types]);
+  const count = products?.length ?? 0;
+  const slides = useMemo<HeroSlide[]>(() => chips.slice(0, 6).map(t => ({
+    key: t.id,
+    title: t.name,
+    description: `${t.counts[gender]} ${t.counts[gender] === 1 ? 'product' : 'products'} in ${t.department}`,
+    image: t.heroImage,
+    cta: `Shop ${t.name}`,
+  })), [chips, gender]);
+  const openSlide = (s: HeroSlide) => { const t = chips.find(x => x.id === s.key); if (t) onOpenType(t); };
 
   return (
     <DirectoryPage
       eyebrow="Directory"
       title="Products"
-      meta={types ? `${total} ${total === 1 ? 'product' : 'products'} across ${groups.reduce((n, g) => n + g.types.length, 0)} types` : 'Loading…'}
-      aside={<GenderLens value={gender} onChange={onChangeGender} counts={types ? lensCounts : undefined} />}
+      meta={products ? `${count} ${count === 1 ? 'product' : 'products'}` : 'Loading…'}
+      aside={<GenderLens value={gender} onChange={onChangeGender} counts={lensCounts} />}
+      hero={<DirectoryHero ghost="Type" slides={slides} onOpen={openSlide} />}
       onClose={onClose}
     >
-      {types === null ? (
-        <div className="dir-grid dir-grid--types" aria-hidden="true">
-          {Array.from({ length: 6 }).map((_, i) => <div key={i} className="dir-type dir-skeleton" />)}
+      {chips.length > 0 && (
+        <div className="dir-type-chips" aria-label="Shop by type">
+          {chips.map(t => (
+            <button key={t.id} type="button" className="dir-type-chip" onClick={() => onOpenType(t)}>
+              <TypeIcon path={t.iconPath} size={16} />
+              <span className="dir-type-chip-name">{t.name}</span>
+              <span className="dir-type-chip-count">{t.counts[gender]}</span>
+            </button>
+          ))}
         </div>
-      ) : groups.map(g => (
-        <section key={g.department} className="dir-section">
-          <h2 className="dir-section-title">{g.department}</h2>
-          <div className="dir-grid dir-grid--types">
-            {g.types.map(t => (
-              <button key={t.id} type="button" className="dir-type" onClick={() => onOpenType(t)}>
-                <span className="dir-type-icon"><TypeIcon path={t.iconPath} size={36} /></span>
-                <span className="dir-name">{t.name}</span>
-                <span className="dir-soft">{t.counts[gender]} {t.counts[gender] === 1 ? 'product' : 'products'}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      ))}
+      )}
+      <ProductGrid products={products} onOpenProduct={onOpenProduct} emptyText="Nothing here for this selection yet." />
     </DirectoryPage>
   );
 }

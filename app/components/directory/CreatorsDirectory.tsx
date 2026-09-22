@@ -1,8 +1,10 @@
 // imports
 import { useEffect, useState, type ReactNode } from 'react';
 import DirectoryPage from './DirectoryPage';
+import DirectoryHero, { type HeroSlide } from './DirectoryHero';
 import { listDirectoryCreators, type DirectoryCreator } from '~/services/directory';
 import { posterRendition } from '~/utils/poster-prefetch';
+import { highResAvatarUrl } from '~/utils/avatarSrc';
 
 // types
 interface CreatorsDirectoryProps {
@@ -45,12 +47,20 @@ export default function CreatorsDirectory({ onOpenCreator, onClose, rail }: Crea
   const featured = curated.length > 0 ? curated : (rows ?? []).slice(0, FALLBACK_FEATURED);
   const featuredSet = new Set(featured.map(c => c.handle));
   const everyone = (rows ?? []).filter(c => !featuredSet.has(c.handle));
+  const slides: HeroSlide[] = featured.slice(0, 6).map(c => ({
+    key: c.handle,
+    title: c.displayName,
+    description: countLine(c),
+    image: c.posters[0] ?? (c.avatarUrl ? highResAvatarUrl(c.avatarUrl) : null),
+    cta: `View ${c.displayName.split(' ')[0]}’s catalog`,
+  }));
 
   return (
     <DirectoryPage
       eyebrow="Directory"
       title="Creators"
       meta={rows ? `${rows.length} ${rows.length === 1 ? 'creator' : 'creators'} curating on Catalog` : 'Loading…'}
+      hero={<DirectoryHero ghost="Creator" slides={slides} onOpen={s => onOpenCreator(s.key)} />}
       onClose={onClose}
     >
       {rail && (

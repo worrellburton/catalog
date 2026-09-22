@@ -1,6 +1,7 @@
 // imports
 import { useEffect, useState } from 'react';
 import DirectoryPage from './DirectoryPage';
+import DirectoryHero, { type HeroSlide } from './DirectoryHero';
 import { listDirectoryCatalogs, type DirectoryCatalog } from '~/services/directory';
 import { posterRendition } from '~/utils/poster-prefetch';
 
@@ -22,6 +23,14 @@ export default function CatalogsDirectory({ onOpenCatalog, onClose }: CatalogsDi
 
   const featured = (rows ?? []).filter(c => c.isFeatured);
   const rest = (rows ?? []).filter(c => !c.isFeatured);
+  const slides: HeroSlide[] = (featured.length > 0 ? featured : rest).slice(0, 6).map(c => ({
+    key: c.slug,
+    title: c.name,
+    description: c.description || `${c.productCount} ${c.productCount === 1 ? 'product' : 'products'}`,
+    image: c.coverUrl || c.images[0] || null,
+    cta: 'Open catalog',
+  }));
+  const openSlide = (s: HeroSlide) => { const c = (rows ?? []).find(x => x.slug === s.key); if (c) onOpenCatalog(c.name); };
 
   const renderRow = (c: DirectoryCatalog) => (
     <button key={c.slug} type="button" className="dir-catalog" onClick={() => onOpenCatalog(c.name)}>
@@ -47,6 +56,7 @@ export default function CatalogsDirectory({ onOpenCatalog, onClose }: CatalogsDi
       eyebrow="Directory"
       title="Catalogs"
       meta={rows ? `${rows.length} curated ${rows.length === 1 ? 'catalog' : 'catalogs'}` : 'Loading…'}
+      hero={<DirectoryHero ghost="Catalog" slides={slides} onOpen={openSlide} />}
       onClose={onClose}
     >
       {rows === null ? (

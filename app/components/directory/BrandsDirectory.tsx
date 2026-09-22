@@ -1,6 +1,7 @@
 // imports
 import { useEffect, useMemo, useState } from 'react';
 import DirectoryPage from './DirectoryPage';
+import DirectoryHero, { type HeroSlide } from './DirectoryHero';
 import { loadBrands, type BrandRow } from '~/services/brands';
 import { posterRendition } from '~/utils/poster-prefetch';
 
@@ -21,6 +22,13 @@ export default function BrandsDirectory({ onOpenBrand, onClose }: BrandsDirector
     return () => { cancelled = true; };
   }, []);
 
+  const slides = useMemo<HeroSlide[]>(() => (rows ?? []).slice(0, 6).map(b => ({
+    key: b.name,
+    title: b.name,
+    description: `${b.productCount} ${b.productCount === 1 ? 'product' : 'products'} in the catalog`,
+    image: b.sampleImageUrl,
+    cta: `Shop ${b.name}`,
+  })), [rows]);
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase();
     const list = rows ?? [];
@@ -47,6 +55,7 @@ export default function BrandsDirectory({ onOpenBrand, onClose }: BrandsDirector
           />
         </label>
       }
+      hero={<DirectoryHero ghost="Brand" slides={slides} onOpen={s => onOpenBrand(s.key)} />}
       onClose={onClose}
     >
       {rows === null ? (

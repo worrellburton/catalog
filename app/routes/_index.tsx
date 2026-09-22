@@ -3065,6 +3065,7 @@ export default function Home() {
                   gender={directoryGender}
                   onChangeGender={setDirectoryGender}
                   onOpenType={openDirectoryType}
+                  onOpenProduct={(p) => { void handleOpenProduct(p); }}
                   onClose={closeDirectory}
                 />
               )}
