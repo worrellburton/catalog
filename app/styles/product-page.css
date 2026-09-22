@@ -570,78 +570,6 @@
   }
 }
 
-/* Size & fit + Materials & care spec sheet that sits between the
-   retailer drawer and the brand rail. Two-row dl so the labels align
-   vertically; empty rows fade out so the section reads cleanly even
-   when the scraper hasn't backfilled the row yet. */
-/* "View more info" dropdown — wraps Size & fit, "Best for", "Popular in". */
-.pd-more-info {
-  /* Just wraps the collapsible panel now — the toggle button lives up in
-     the action group. No own margin so it doesn't add a phantom gap while
-     collapsed; the open panel supplies its own breathing room below. */
-  margin-top: 0;
-}
-
-.pd-more-info-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  font-family: inherit;
-  letter-spacing: 0.01em;
-  cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
-}
-.pd-more-info-btn:hover {
-  border-color: rgba(255, 255, 255, 0.30);
-  background: rgba(255, 255, 255, 0.10);
-}
-.light-mode .pd-more-info-btn {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.14);
-  color: #0a0a0a;
-}
-.light-mode .pd-more-info-btn:hover {
-  background: rgba(0, 0, 0, 0.08);
-  border-color: rgba(0, 0, 0, 0.22);
-}
-.pd-more-info-chevron {
-  transition: transform 0.24s cubic-bezier(0.32, 0.72, 0, 1);
-}
-.pd-more-info-btn.is-open .pd-more-info-chevron {
-  transform: rotate(180deg);
-}
-
-/* Panel reveal — animates open from the button. `hidden` keeps it out of
-   the a11y tree + layout when collapsed; when open it sits just below the
-   action group with a small gap so it reads as that toggle's content. */
-.pd-more-info-panel.is-open {
-  margin-top: 10px;
-  animation: pd-more-info-in 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
-}
-@keyframes pd-more-info-in {
-  from { opacity: 0; transform: translateY(-6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-/* The first detail block inside the panel shouldn't re-draw the divider —
-   the dropdown wrapper already owns the top border. */
-.pd-more-info-panel > .pd-specs:first-child,
-.pd-more-info-panel > .pd-chips:first-child,
-.pd-more-info-panel > .pd-popular:first-child {
-  margin-top: 4px;
-  padding-top: 0;
-  border-top: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  .pd-more-info-panel.is-open { animation: none; }
-}
-
 .pd-specs {
   margin-top: 28px;
   padding-top: 20px;
@@ -690,25 +618,6 @@
 .pd-specs-value.is-empty {
   color: rgba(255, 255, 255, 0.35);
   font-style: italic;
-}
-
-/* "Best for" suggestion chips — sits directly below the Size & fit spec
-   sheet. Each group is a label-aligned row (matching .pd-specs-row's
-   86px label column) followed by a wrapping flow of informational pills.
-   Chips are non-interactive: they communicate context, not actions. */
-.pd-chips {
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.pd-chips-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.6);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin: 0 0 14px;
 }
 
 .pd-chip-groups {
@@ -1098,102 +1007,6 @@
   font-weight: 500;
   color: rgba(255, 255, 255, 0.8);
   margin-bottom: 12px;
-}
-
-.pd-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: stretch;
-}
-
-/* Shop, Add to a look, Comments and the View more info toggle all share
-   one height + box model so they read as a single grouped set of buttons
-   rather than separate, mismatched pills. */
-.pd-shop-btn,
-.pd-tryon-btn,
-.pd-comments-btn,
-.pd-actions > .pd-more-info-btn {
-  min-height: 48px;
-  box-sizing: border-box;
-}
-
-/* One cohesive 2-up block: every action takes half the row, so the four
-   buttons stack into a tidy 2x2 grid —
-     Shop      · Add to a look
-     Comments  · View more info
-   A lone wrapped item (e.g. when Comments is disabled, or there's no extra
-   info) grows to fill its whole row instead of orphaning at half width. */
-.pd-actions > .pd-shop-btn,
-.pd-actions > .pd-tryon-btn,
-.pd-actions > .pd-comments-btn,
-.pd-actions > .pd-more-info-btn {
-  flex: 1 1 calc(50% - 4px);
-  min-width: 0;
-  justify-content: center;
-}
-
-/* Comments and View more info each take their OWN full-width row, below the
-   Shop / Add-to-a-look pair:
-     Shop      · Add to a look
-     Comments            (full row)
-     View more info      (full row)  */
-.pd-actions > .pd-comments-btn,
-.pd-actions > .pd-more-info-btn {
-  flex-basis: 100%;
-}
-
-/* The View more info toggle, now a member of the action group, matches the
-   ghost siblings exactly (Add to a look / Comments) so the set reads as one
-   family. The label + chevron stay centered like the others. */
-.pd-actions > .pd-more-info-btn {
-  padding: 12px 18px;
-  font-size: 14px;
-}
-
-.pd-shop-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 22px;
-  background: #fff;
-  color: #0a0a0a;
-  border: none;
-  border-radius: 999px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.2s, transform 0.2s;
-}
-
-.pd-shop-btn:hover:not(:disabled) {
-  opacity: 0.9;
-  transform: translateY(-1px);
-}
-
-.pd-shop-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.pd-ghost-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  background: transparent;
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
-}
-
-.pd-ghost-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.3);
 }
 
 /* "More like this" - vector-similarity creative video rail. Renders below the
@@ -1622,36 +1435,6 @@
   line-height: 1;
 }
 
-/* Shop button - sits next to Save. Tap toggles the retailer drawer. */
-.pd-shop-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 22px;
-  border-radius: 999px;
-  /* Gold primary CTA — sets Shop apart from the ghost-style siblings. */
-  background: linear-gradient(135deg, #f3d27c 0%, #d8a93c 52%, #bd8a2c 100%);
-  border: 0;
-  color: #211803;
-  font-size: 14px;
-  font-weight: 700;
-  font-family: inherit;
-  cursor: pointer;
-  transition: transform 0.18s cubic-bezier(0.32, 0.72, 0, 1), box-shadow 0.2s ease, filter 0.2s ease;
-  /* Soft, contained glow — enough to read as the primary gold CTA without
-     floating above its grouped siblings. */
-  box-shadow: 0 2px 10px rgba(216, 169, 60, 0.20);
-}
-.pd-shop-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(216, 169, 60, 0.34); filter: brightness(1.05); }
-.pd-shop-btn:active { transform: scale(0.97); }
-.pd-shop-chevron {
-  transition: transform 0.24s cubic-bezier(0.32, 0.72, 0, 1);
-}
-.pd-shop-btn.is-open .pd-shop-chevron {
-  transform: rotate(180deg);
-}
-
 /* Creator earnings bubble — sits to the left of the Save bookmark
    on the actions row. Reflects the signed-in creator's wallet
    balance so they see what this product is earning at a glance. */
@@ -1668,220 +1451,6 @@
   font-family: inherit;
   letter-spacing: -0.01em;
   white-space: nowrap;
-}
-
-/* Try-it-on button — sits between Shop and Save. Outline pill so it
-   reads as a secondary CTA: less weight than Shop (filled), more
-   visual presence than Save (outline + icon). Tapping navigates to
-   /generate with this product pre-picked. */
-.pd-tryon-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 18px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
-}
-.pd-tryon-btn:hover {
-  background: rgba(255, 255, 255, 0.10);
-  border-color: rgba(240, 192, 96, 0.45);
-  color: #f0c060;
-}
-.pd-tryon-btn:active { transform: scale(0.97); }
-.light-mode .pd-tryon-btn {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.14);
-  color: #0a0a0a;
-}
-.light-mode .pd-tryon-btn:hover {
-  background: rgba(0, 0, 0, 0.08);
-  border-color: rgba(180, 130, 30, 0.5);
-  color: #b08230;
-}
-
-/* Comments — third action in the row, same ghost treatment as
-   "Add to a look" so Shop / Add to a look / Comments read as a set. */
-.pd-comments-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 18px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  font-family: inherit;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
-}
-.pd-comments-btn:hover {
-  background: rgba(255, 255, 255, 0.10);
-  border-color: rgba(255, 255, 255, 0.30);
-}
-.pd-comments-btn:active { transform: scale(0.97); }
-.light-mode .pd-comments-btn {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.14);
-  color: #0a0a0a;
-}
-.light-mode .pd-comments-btn:hover { background: rgba(0, 0, 0, 0.08); }
-
-/* Retailer drawer - collapsed by default, expands beneath the action row.
-   Uses grid-template-rows 0fr → 1fr for a smooth height animation that
-   doesn't require knowing the content height in advance. */
-
-/* The drawer now lives INSIDE .pd-actions (right after the Shop button in
-   the DOM). Without these it lands BESIDE Shop on one flex line, and
-   align-items:stretch balloons the gold pill to the drawer's height —
-   the giant-ellipse desktop bug. order pushes it visually below the
-   whole 2x2 button group; full basis gives it its own row. */
-.pd-actions > .pd-retailers-drawer {
-  order: 10;
-  flex-basis: 100%;
-  min-width: 0;
-}
-
-.pd-retailers-drawer {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 0.3s cubic-bezier(0.32, 0.72, 0, 1);
-  margin: 0;
-}
-.pd-retailers-drawer.is-open {
-  grid-template-rows: 1fr;
-  margin-top: 14px;
-}
-.pd-retailers-drawer > .pd-retailers {
-  overflow: hidden;
-  min-height: 0;
-  /* Fade the offers in WITH the height expand so the drawer dissolves open
-     as smoothly as the comments sheet (the `hidden` attr used to display:none
-     it, which killed the grid-rows transition and made it snap). */
-  opacity: 0;
-  transition: opacity 0.26s ease 0.04s;
-}
-.pd-retailers-drawer.is-open > .pd-retailers {
-  opacity: 1;
-}
-
-/* Retailer comparison strip - list of pill-shaped buttons, one per
-   retailer. Each one shows the retailer name + that retailer's price + a
-   badge (Official / Lowest / Discount %). Tap opens the in-app browser at
-   that retailer's product page. Stacked vertically so prices line up. */
-.pd-retailers {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0;
-}
-
-.pd-retailer-chip {
-  display: grid;
-  width: 100%;
-  grid-template-columns: 1fr auto auto auto;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  color: #fff;
-  font-family: inherit;
-  font-size: 14px;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    transform 0.16s cubic-bezier(0.32, 0.72, 0, 1),
-    background 0.18s ease,
-    border-color 0.18s ease;
-}
-
-.pd-retailer-chip:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.22);
-  transform: translateY(-1px);
-}
-.pd-retailer-chip:active { transform: scale(0.99); }
-
-.pd-retailer-name {
-  font-weight: 500;
-  letter-spacing: -0.005em;
-}
-
-.pd-retailer-price {
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.pd-retailer-badge {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 3px 7px;
-  border-radius: 999px;
-  color: rgba(255, 255, 255, 0.7);
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.pd-retailer-badge--lowest {
-  color: #0a0a0a;
-  background: #ffd75c;
-}
-
-.pd-retailer-badge--discount {
-  color: #fff;
-  background: #2bb673; /* slight green for "you're saving" */
-}
-
-/* The brand-site row gets a soft white emphasis since it's the canonical
-   purchase path even when not the cheapest. */
-.pd-retailer-chip.is-official {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 255, 255, 0.18);
-}
-
-.pd-retailer-arrow {
-  color: rgba(255, 255, 255, 0.5);
-  flex-shrink: 0;
-}
-
-/* Bookmark button - outline default, fills on save. Same chip shape as the
-   retailer rows for visual consistency. */
-.pd-bookmark-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 18px;
-  border-radius: 999px;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-  transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.16s;
-}
-.pd-bookmark-btn:hover {
-  border-color: rgba(255, 255, 255, 0.36);
-  background: rgba(255, 255, 255, 0.06);
-}
-.pd-bookmark-btn:active { transform: scale(0.97); }
-.pd-bookmark-btn.is-saved {
-  color: #ffd75c;
-  border-color: rgba(255, 215, 92, 0.6);
-  background: rgba(255, 215, 92, 0.08);
 }
 
 /* Comment button — same pill shape as Save, sits in the action row. */
@@ -2050,20 +1619,6 @@
   color: rgba(0, 0, 0, 0.7);
 }
 
-.light-mode .pd-shop-btn {
-  background: linear-gradient(135deg, #f3d27c 0%, #d8a93c 52%, #bd8a2c 100%);
-  color: #211803;
-}
-
-.light-mode .pd-ghost-btn {
-  color: #111;
-  border-color: rgba(0, 0, 0, 0.15);
-}
-
-.light-mode .pd-ghost-btn:hover {
-  background: rgba(0, 0, 0, 0.04);
-}
-
 .light-mode .pd-feed-title {
   color: rgba(0, 0, 0, 0.4);
 }
@@ -2209,10 +1764,6 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-/* The retailers drawer lives INSIDE the .pd-actions grid now — span the
-   full row so offers open edge-to-edge directly under the Shop button. */
-.pd-actions > .pd-retailers-drawer { grid-column: 1 / -1; }
-
 /* ── Card-overlay fade WHILE SCROLLING — UNIFIED, see grid-view.css ──────────
    The card feeds below a product carry overlay chrome: the "FEATURED IN LOOKS"
    tiles have a .pd-look-tile-meta chip (avatar + .card-creator-tag-name), any
@@ -2243,4 +1794,180 @@
   .pd-back,
   .pd-share-floating,
   .pd-save-floating { background: rgba(0, 0, 0, 0.6); }
+}
+
+/* ── Paper-catalog info column ─────────────────────────────────────────
+   The product's right-hand column reads like a page from a printed
+   catalog: a small-caps brand line, a serif title, the price set plain,
+   then one real "order line" (Shop at <brand> → the product's own URL)
+   between hairlines, two quiet text links, and the spec sheet. No pills,
+   no gradients, no glows; every element is backed by real data. Colors
+   come from three tokens so light mode is one override. */
+.pd-info--catalog {
+  --pd-ink: #f3efe7;
+  --pd-ink-soft: rgba(243, 239, 231, 0.62);
+  --pd-rule: rgba(243, 239, 231, 0.16);
+  --pd-serif: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, 'Times New Roman', serif;
+  padding-top: 32px;
+}
+.light-mode .pd-info--catalog {
+  --pd-ink: #16140f;
+  --pd-ink-soft: rgba(22, 20, 15, 0.6);
+  --pd-rule: rgba(22, 20, 15, 0.16);
+}
+.pd-info--catalog .pd-info-inner { gap: 0; }
+
+.pd-info--catalog .pd-catalog-brand {
+  display: inline-block;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--pd-ink-soft);
+  margin-bottom: 14px;
+  cursor: default;
+}
+.pd-info--catalog button.pd-catalog-brand { cursor: pointer; }
+.pd-info--catalog button.pd-catalog-brand:hover,
+.pd-info--catalog button.pd-catalog-brand:focus-visible {
+  background: none;
+  color: var(--pd-ink);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
+}
+
+.pd-info--catalog .pd-name {
+  font-family: var(--pd-serif);
+  font-size: 36px;
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--pd-ink);
+  margin: 0 0 10px;
+  text-wrap: balance;
+}
+.pd-info--catalog .pd-price {
+  font-size: 17px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--pd-ink-soft);
+  margin: 0 0 6px;
+}
+
+/* The order line. */
+.pd-info--catalog .pd-catalog-actions {
+  margin-top: 26px;
+  border-top: 1px solid var(--pd-rule);
+}
+.pd-info--catalog .pd-catalog-shop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 18px 2px;
+  border: none;
+  border-bottom: 1px solid var(--pd-rule);
+  background: none;
+  color: var(--pd-ink);
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  text-align: left;
+  cursor: pointer;
+  transition: padding 0.18s ease;
+}
+.pd-info--catalog .pd-catalog-shop-arrow {
+  flex-shrink: 0;
+  color: var(--pd-ink-soft);
+  transition: transform 0.18s ease, color 0.18s ease;
+}
+@media (hover: hover) {
+  .pd-info--catalog .pd-catalog-shop:hover { padding-left: 8px; padding-right: 0; }
+  .pd-info--catalog .pd-catalog-shop:hover .pd-catalog-shop-arrow {
+    color: var(--pd-ink);
+    transform: translate(2px, -2px);
+  }
+}
+.pd-info--catalog .pd-catalog-shop:focus-visible {
+  outline: 1px solid var(--pd-ink-soft);
+  outline-offset: 4px;
+}
+
+.pd-info--catalog .pd-catalog-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+  padding: 14px 2px 0;
+}
+.pd-info--catalog .pd-catalog-link {
+  padding: 4px 0;
+  border: none;
+  background: none;
+  color: var(--pd-ink-soft);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+.pd-info--catalog .pd-catalog-link:hover,
+.pd-info--catalog .pd-catalog-link:focus-visible {
+  color: var(--pd-ink);
+  text-decoration-color: var(--pd-ink-soft);
+  outline: none;
+}
+
+/* Spec sheet, catalogs, rails: the same hairline + small-caps rhythm. */
+.pd-info--catalog .pd-specs,
+.pd-info--catalog .pd-popular,
+.pd-info--catalog .pd-info-brand-rail {
+  margin-top: 30px;
+  padding-top: 22px;
+  border-top: 1px solid var(--pd-rule);
+}
+.pd-info--catalog .pd-specs-title,
+.pd-info--catalog .pd-popular-title,
+.pd-info--catalog .pd-info-brand-rail-title {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--pd-ink-soft);
+  margin: 0 0 14px;
+}
+.pd-info--catalog .pd-specs-list { gap: 0; }
+.pd-info--catalog .pd-specs-row {
+  grid-template-columns: 96px minmax(0, 1fr);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--pd-rule);
+}
+.pd-info--catalog .pd-specs-row:last-child { border-bottom: none; }
+.pd-info--catalog .pd-specs-label {
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  color: var(--pd-ink-soft);
+}
+.pd-info--catalog .pd-specs-value {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--pd-ink);
+}
+
+@media (max-width: 768px) {
+  .pd-info--catalog { padding-top: 22px; }
+  .pd-info--catalog .pd-name { font-size: 30px; }
+}
+.light-mode .pd-info--catalog .pd-popular-pill {
+  color: var(--pd-ink);
+  background: rgba(22, 20, 15, 0.05);
+  border-color: rgba(22, 20, 15, 0.16);
 }

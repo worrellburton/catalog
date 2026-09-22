@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { Fragment, useState, useEffect, useCallback } from 'react';
 import { catalogAlert, catalogConfirm } from '~/components/CatalogDialog';
 import {
   listCrawlJobs,
@@ -9,6 +9,7 @@ import {
   type CrawlJob,
 } from '~/services/site-crawls';
 import JobProgress from '~/components/JobProgress';
+import CrawlProductsRow from '~/components/admin/CrawlProductsRow';
 import RerunAllStuckButton from '~/components/RerunAllStuckButton';
 import ShopMyIngest from '~/components/ShopMyIngest';
 import { isStuck } from '~/utils/aiBudget';
@@ -141,6 +142,8 @@ export default function ProfileCrawlsPanel() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Job whose ingested-products panel is open (one at a time).
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   // Set once the operator submits a ShopMy URL; hands off to <ShopMyIngest>,
   // which owns preview, confirm, progress and the write.
   const [shopMyUrl, setShopMyUrl] = useState<string | null>(null);
@@ -290,7 +293,8 @@ export default function ProfileCrawlsPanel() {
             </thead>
             <tbody>
               {jobs.map((j) => (
-                <tr key={j.id}>
+                <Fragment key={j.id}>
+                <tr>
                   <td style={{ fontWeight: 500 }}>{j.site_name || ' - '}</td>
                   <td style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     <a
@@ -322,7 +326,26 @@ export default function ProfileCrawlsPanel() {
                       </div>
                     )}
                   </td>
-                  <td>{j.total_urls || 0}</td>
+                  <td>
+                    {/* Click to drop down the products this crawl ingested. */}
+                    <button
+                      type="button"
+                      className="admin-recrawl-expand"
+                      onClick={() => setExpandedId(prev => (prev === j.id ? null : j.id))}
+                      aria-expanded={expandedId === j.id}
+                      title={expandedId === j.id ? 'Hide ingested products' : 'Show ingested products'}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: 0, background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', font: 'inherit' }}
+                    >
+                      <svg
+                        width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+                        style={{ transform: expandedId === j.id ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease', opacity: 0.6 }}
+                      >
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                      {j.total_urls || 0}
+                    </button>
+                  </td>
                   <td className="admin-cell-muted">{timeAgo(j.started_at)}</td>
                   <td className="admin-cell-muted">{timeAgo(j.completed_at)}</td>
                   <td>
@@ -348,6 +371,8 @@ export default function ProfileCrawlsPanel() {
                     </div>
                   </td>
                 </tr>
+                {expandedId === j.id && <CrawlProductsRow job={j} colSpan={7} />}
+                </Fragment>
               ))}
             </tbody>
           </table>

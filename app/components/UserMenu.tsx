@@ -205,6 +205,8 @@ function UserMenu({
   const [invite, setInvite] = useState<{ handle: string | null; link: string | null; count: number; earnedCents: number } | null>(null);
   const [inviteCopied, setInviteCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  // The desktop mega menu is portaled to <body>, outside menuRef.
+  const megaRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const navigate = useNavigate();
 
@@ -405,7 +407,9 @@ function UserMenu({
   useEffect(() => {
     if (!open) return;
     const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      const t = e.target as Node;
+      if (megaRef.current?.contains(t)) return; // the mega menu handles its own backdrop
+      if (menuRef.current && !menuRef.current.contains(t)) {
         setOpen(false);
       }
     };
@@ -492,7 +496,28 @@ function UserMenu({
       )}
       {open && (
         <>
-          <div className="user-menu-popout user-menu-popout--graphical">
+          {/* Desktop: a full-page glass mega menu (portaled to <body> so it
+              escapes the header's stacking context). Left column = who you
+              are + where you can go; right column = what you've been looking
+              at + saved, then preferences. Click the backdrop, the ✕, or
+              Escape to close. Mobile keeps the .user-menu-page surface below
+              (the native shell observes that class). */}
+          {typeof document !== 'undefined' && createPortal(
+            <div
+              className="user-menu-mega"
+              ref={megaRef}
+              onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
+            >
+              <button
+                type="button"
+                className="user-menu-mega-close"
+                onClick={() => setOpen(false)}
+                aria-label="Close menu"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
+              <div className="user-menu-mega-inner" role="dialog" aria-label="Account">
+                <aside className="user-menu-mega-side">
             {user && (
               <>
                 <div
@@ -566,24 +591,7 @@ function UserMenu({
                 <div className="user-menu-divider" />
               </>
             )}
-
-            {/* Try it on removed; Style moved to the super-admin section below. */}
-
-            {/* Recently viewed, Saved looks, Saved products, Following —
-                shared with the mobile account page via MenuContentSections so
-                the two surfaces never drift. runTile closes the popout before
-                opening the target. The My Catalog / Saved / admin nav below
-                follows the Following row, same as before. */}
-            <MenuContentSections
-              recents={recents}
-              looks={looks}
-              products={products}
-              onOpenProduct={onOpenProduct}
-              onOpenLook={onOpenLook}
-              onOpenBookmarks={onOpenBookmarks}
-              onOpenCreator={onOpenCreator}
-              run={runTile}
-            />
+                  <nav className="user-menu-mega-nav" aria-label="Account pages">
             {onOpenMyLooks && (
               <button className="user-menu-item" onClick={runItem(onOpenMyLooks)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -660,6 +668,69 @@ function UserMenu({
                 <span>Home 2.0</span>
               </button>
             )}
+                  </nav>
+                  <div className="user-menu-mega-side-foot">
+            {onOpenDecks && (
+              <button className="user-menu-item" onClick={runItem(onOpenDecks)}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="4" x2="9" y2="20"/></svg>
+                <span>Decks</span>
+              </button>
+            )}
+            {/* Log out only renders for a real session — a guest seeing
+                "Log out" reads as "my account lost its menu items" (it
+                did, to the founder, after a signing-key rotation logged
+                everyone out). */}
+            {onLogout && user && (
+              <>
+                <div className="user-menu-divider" />
+                <button className="user-menu-item" onClick={runItem(onLogout)}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                  <span>Log out</span>
+                </button>
+                {/* Shell only: App Store guideline 5.1.1(v) requires an in-app
+                    path to account deletion. The confirmation and the delete
+                    itself are native — this row only opens the native screen. */}
+                {inNativeShell && (
+                  <button
+                    className="user-menu-item"
+                    onClick={runItem(() => {
+                      (window as unknown as {
+                        flutter_inappwebview?: { callHandler?: (name: string) => void };
+                      }).flutter_inappwebview?.callHandler?.('catalogDeleteAccount');
+                    })}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    <span>Delete account</span>
+                  </button>
+                )}
+              </>
+            )}
+            {/* Signed out → a way IN. (The trigger normally routes guests
+                straight to the gate, so this is the fallback for any path
+                that still lands in the popout without a session.) */}
+            {!user && (onSignIn || onGuestSignup) && (
+              <>
+                <div className="user-menu-divider" />
+                <button className="user-menu-item" onClick={runItem(() => (onGuestSignup ?? onSignIn)!())}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                  <span>Log in</span>
+                </button>
+              </>
+            )}
+                  </div>
+                </aside>
+                <main className="user-menu-mega-main">
+            <MenuContentSections
+              recents={recents}
+              looks={looks}
+              products={products}
+              onOpenProduct={onOpenProduct}
+              onOpenLook={onOpenLook}
+              onOpenBookmarks={onOpenBookmarks}
+              onOpenCreator={onOpenCreator}
+              run={runTile}
+            />
+                  <div className="user-menu-mega-prefs">
             {onChangeCatalogGender && (
               <div className="user-menu-item user-menu-item--segmented" role="group" aria-label="Shopping for">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -711,54 +782,12 @@ function UserMenu({
                 </span>
               </button>
             )}
-            {onOpenDecks && (
-              <button className="user-menu-item" onClick={runItem(onOpenDecks)}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="4" x2="9" y2="20"/></svg>
-                <span>Decks</span>
-              </button>
-            )}
-            {/* Log out only renders for a real session — a guest seeing
-                "Log out" reads as "my account lost its menu items" (it
-                did, to the founder, after a signing-key rotation logged
-                everyone out). */}
-            {onLogout && user && (
-              <>
-                <div className="user-menu-divider" />
-                <button className="user-menu-item" onClick={runItem(onLogout)}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                  <span>Log out</span>
-                </button>
-                {/* Shell only: App Store guideline 5.1.1(v) requires an in-app
-                    path to account deletion. The confirmation and the delete
-                    itself are native — this row only opens the native screen. */}
-                {inNativeShell && (
-                  <button
-                    className="user-menu-item"
-                    onClick={runItem(() => {
-                      (window as unknown as {
-                        flutter_inappwebview?: { callHandler?: (name: string) => void };
-                      }).flutter_inappwebview?.callHandler?.('catalogDeleteAccount');
-                    })}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                    <span>Delete account</span>
-                  </button>
-                )}
-              </>
-            )}
-            {/* Signed out → a way IN. (The trigger normally routes guests
-                straight to the gate, so this is the fallback for any path
-                that still lands in the popout without a session.) */}
-            {!user && (onSignIn || onGuestSignup) && (
-              <>
-                <div className="user-menu-divider" />
-                <button className="user-menu-item" onClick={runItem(() => (onGuestSignup ?? onSignIn)!())}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
-                  <span>Log in</span>
-                </button>
-              </>
-            )}
-          </div>
+                  </div>
+                </main>
+              </div>
+            </div>,
+            document.body,
+          )}
         </>
       )}
 

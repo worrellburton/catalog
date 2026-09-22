@@ -7,8 +7,8 @@
  * renders each group as a click-to-expand accordion row so the default
  * view is ~10 rows instead of a 40-page dump. `adminNavItems` is the
  * flattened list (pinned + every group item, in declaration order) for
- * code that needs the plain page list: active-route matching, the
- * most-recently-visited history, and the nav search.
+ * code that needs the plain page list: active-route matching and the
+ * nav search.
  *
  * Adding a page: put it in the group it belongs to (or a new group) and
  * add a search alias below. scripts/check-routes.mjs asserts every
