@@ -172,6 +172,32 @@ This project uses **three long-lived branches**. All AI tools (Claude Code, GitH
 | `vite.config.ts` | Vite + Remix config (SPA mode, basePath, 404.html copy) |
 | `.github/workflows/deploy.yml` | GitHub Actions workflow for building and deploying |
 
+## Site nav & directory pages
+
+The desktop header carries the primary nav beside the wordmark —
+**Creators · Brands · Products · Catalogs** (`app/components/HeaderNav.tsx`,
+styles in `app/styles/header-nav.css`). The logo stays home, and home stays
+the Daily Feed. On phones the same four live in the account menu (UserMenu
+`onOpenDirectory`). Hovering **Products** drops a full-width mega menu
+(`ProductsMegaMenu.tsx`, portaled to `<body>` so it escapes the header's
+stacking context): an All / Women / Men lens, every second-ring product
+type with its `product_types.icon_path` icon and count, grouped by
+department; clicking a type opens `/products/<type>`.
+
+| Route | Component | Data |
+|---|---|---|
+| `/creators` | `components/directory/CreatorsDirectory.tsx` | `listDirectoryCreators` — creators table + live looks (posters via `looks_creative`) + `creator_follows`; **featured** = `featured_creators` table (Admin → Creators star), ranked list below |
+| `/brands` | `BrandsDirectory.tsx` | `loadBrands()` (products aggregated by brand); opens `BrandPage` |
+| `/products`, `/products/<type>` | `ProductsDirectory.tsx`, `ProductTypeDirectory.tsx` | `listDirectoryTypes` / `listProductsByType` (`services/directory.ts`, one cached products pull) |
+| `/catalogs` | `CatalogsDirectory.tsx` | `listDirectoryCatalogs` (live, non-home catalogs with products); opens the catalog as a feed search |
+
+Routing: each path is a child stub of the persistent `_index` layout
+(`vite.config.ts`); `_index` holds `directory` state seeded from the path,
+`openDirectory` pushes history, the Back listener re-reads the path
+(`parseDirectoryPath`). Pages render as a fixed layer at z 90 — under the
+header (z 100) so the nav stays live, above the feed. All in Paper Catalog
+(`app/styles/directory.css`).
+
 ## Navigation / Page Structure
 
 Single-page app with React state-driven views:

@@ -30,6 +30,9 @@ interface FollowingRailProps {
   /** Tapping the pinned self entry opens the viewer's own My Catalog
    *  (creator management view) instead of the shopper-facing creator page. */
   onOpenSelf?: () => void;
+  /** 'header' (default) carries the header-centre mobile positioning;
+   *  'page' renders the same rail in-flow (the /creators directory). */
+  variant?: 'header' | 'page';
 }
 
 interface RailEntry {
@@ -82,7 +85,7 @@ function timeAgo(ms: number): string {
  *
  * Hidden when both rails are empty.
  */
-function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog: _onCreateFollowingCatalog, onOpenFollowingList, selfEntry, onOpenSelf }: FollowingRailProps) {
+function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog: _onCreateFollowingCatalog, onOpenFollowingList, selfEntry, onOpenSelf, variant = 'header' }: FollowingRailProps) {
   const showFollowing = mode === 'following' || mode === 'both';
   const showFollowers = mode === 'followers' || mode === 'both';
   // Auth-aware refresh. The rail used to mount BEFORE auth resolved
@@ -440,7 +443,7 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
     return (
       <div
         ref={wrapperRef}
-        className="follow-rail-wrap follow-rail-wrap--center"
+        className={`follow-rail-wrap${variant === 'page' ? ' follow-rail-wrap--page' : ' follow-rail-wrap--center'}`}
         style={{
           position: 'relative',
           display: 'inline-flex',

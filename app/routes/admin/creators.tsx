@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { listAdminCreators, type AdminCreatorRow } from '~/services/creators';
+import { listFeaturedCreatorHandles, setCreatorFeatured } from '~/services/directory';
 import ShopMyImportWizard from '~/components/ShopMyImportWizard';
 
 export default function AdminCreators() {
@@ -10,6 +11,9 @@ export default function AdminCreators() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
+  // Featured on the consumer /creators directory (featured_creators table).
+  const [featured, setFeatured] = useState<Set<string>>(new Set());
+  const [featuredBusy, setFeaturedBusy] = useState<string | null>(null);
   const { sortedData, sort, handleSort } = useSortableTable(rows);
   const navigate = useNavigate();
 
@@ -23,6 +27,23 @@ export default function AdminCreators() {
       .finally(() => setLoading(false));
   };
   useEffect(load, []);
+  useEffect(() => {
+    listFeaturedCreatorHandles().then(h => setFeatured(new Set(h.map(x => x.toLowerCase()))));
+  }, []);
+
+  const toggleFeatured = async (handle: string) => {
+    const key = handle.toLowerCase();
+    const on = !featured.has(key);
+    setFeaturedBusy(handle);
+    const { error } = await setCreatorFeatured(handle, on);
+    setFeaturedBusy(null);
+    if (error) { setError(`Couldn't update featured: ${error}`); return; }
+    setFeatured(prev => {
+      const next = new Set(prev);
+      if (on) next.add(key); else next.delete(key);
+      return next;
+    });
+  };
 
   return (
     <div className="admin-page">
@@ -64,6 +85,7 @@ export default function AdminCreators() {
                   <SortableTh label="Products" sortKey="products" currentSort={sort} onSort={handleSort} />
                   <SortableTh label="Looks" sortKey="looks" currentSort={sort} onSort={handleSort} />
                   <SortableTh label="Joined" sortKey="created_at" currentSort={sort} onSort={handleSort} />
+                  <th title="Shown in the Featured grid on /creators">Featured</th>
                 </tr>
               </thead>
               <tbody>
@@ -80,6 +102,19 @@ export default function AdminCreators() {
                     <td>{c.products}</td>
                     <td>{c.looks}</td>
                     <td>{c.created_at ? new Date(c.created_at).toLocaleDateString() : '—'}</td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        className={`admin-featured-toggle${featured.has(c.handle.toLowerCase()) ? ' is-on' : ''}`}
+                        onClick={() => toggleFeatured(c.handle)}
+                        disabled={featuredBusy === c.handle}
+                        aria-pressed={featured.has(c.handle.toLowerCase())}
+                        aria-label={featured.has(c.handle.toLowerCase()) ? 'Remove from featured' : 'Feature on /creators'}
+                        title={featured.has(c.handle.toLowerCase()) ? 'Featured — click to remove' : 'Feature on /creators'}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill={featured.has(c.handle.toLowerCase()) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
