@@ -4,6 +4,7 @@ import SiteCrawlsPanel from '~/components/SiteCrawlsPanel';
 import CollectionCrawlsPanel from '~/components/CollectionCrawlsPanel';
 import ProductCrawlsPanel from '~/components/ProductCrawlsPanel';
 import ProfileCrawlsPanel from '~/components/ProfileCrawlsPanel';
+import ShopMyCreatorsPanel from '~/components/ShopMyCreatorsPanel';
 import VideoGenerationPanel from '~/components/VideoGenerationPanel';
 import ProductAdsPanel from '~/components/ProductAdsPanel';
 import { listCrawlJobs, type CrawlJob } from '~/services/site-crawls';
@@ -11,7 +12,7 @@ import { getGeneratedVideos, type GeneratedVideo } from '~/services/video-genera
 import { getProductAds, type ProductAd } from '~/services/product-creative';
 
 type Tab = 'overview' | 'crawls' | 'video-gen';
-type CrawlSubTab = 'full-site' | 'collections' | 'profiles' | 'products';
+type CrawlSubTab = 'full-site' | 'collections' | 'profiles' | 'products' | 'creators';
 type VideoSubTab = 'product-ads' | 'look-videos';
 
 export default function AdminAgents() {
@@ -207,12 +208,19 @@ export default function AdminAgents() {
             >
               Products
             </button>
+            <button
+              className={`admin-subtab ${crawlSub === 'creators' ? 'active' : ''}`}
+              onClick={() => setCrawlSubTab('creators')}
+            >
+              Creators
+            </button>
           </div>
 
           {crawlSub === 'full-site' && <SiteCrawlsPanel embedded />}
           {crawlSub === 'collections' && <CollectionCrawlsPanel />}
           {crawlSub === 'profiles' && <ProfileCrawlsPanel />}
           {crawlSub === 'products' && <ProductCrawlsPanel />}
+          {crawlSub === 'creators' && <ShopMyCreatorsPanel />}
         </div>
       ) : (
         <div className="admin-agent-subsection">

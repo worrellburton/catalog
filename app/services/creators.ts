@@ -53,3 +53,24 @@ export async function listAdminCreators(): Promise<AdminCreatorsResult> {
     error: null,
   };
 }
+
+export interface ShopMyCreatorIdentity {
+  handle: string;
+  display_name: string;
+  bio: string | null;
+}
+
+/** The ShopMy creator a previous import of this exact shop URL wrote, if any.
+ *  A re-run passes this identity back to shopmy-ingest so a handle the wizard
+ *  renamed is updated in place instead of re-created under ShopMy's username. */
+export async function findShopMyCreatorBySourceUrl(url: string): Promise<ShopMyCreatorIdentity | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.from('creators')
+    .select('handle, display_name, bio')
+    .eq('source', 'shopmy')
+    .eq('source_url', url)
+    .order('created_at', { ascending: true })
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return (data?.[0] as ShopMyCreatorIdentity | undefined) ?? null;
+}
