@@ -77,7 +77,7 @@ export default function ShopMyCreatorsPanel() {
                   <td style={{ fontWeight: 500 }}>
                     {c.avatar_url && (
                       <img src={c.avatar_url} alt="" width={28} height={28} loading="lazy"
-                           style={{ borderRadius: '50%', verticalAlign: 'middle', marginRight: 8 }} />
+                           style={{ borderRadius: '50%', objectFit: 'cover', verticalAlign: 'middle', marginRight: 8 }} />
                     )}
                     <a href={`/c/${creatorSlug(c.handle)}`} target="_blank" rel="noopener noreferrer"
                        style={{ color: 'inherit', textDecoration: 'none' }} title="Open their Catalog page">
