@@ -36,8 +36,11 @@ type HlsInstance = Pick<HlsType, 'loadSource' | 'attachMedia' | 'destroy'>;
 
 // Lazy module loader — the dynamic import is what makes Vite split hls.js into
 // its own chunk, fetched only when the first HLS source appears.
-let hlsModPromise: Promise<typeof import('hls.js')> | null = null;
-function loadHls(): Promise<typeof import('hls.js')> {
+// Typed off the type-only HlsType import: a module-scope `typeof import(...)`
+// is what scripts/check-no-typeof-import.mjs guards against (production TDZ).
+type HlsModule = { default: typeof HlsType };
+let hlsModPromise: Promise<HlsModule> | null = null;
+function loadHls(): Promise<HlsModule> {
   return (hlsModPromise ??= import('hls.js'));
 }
 
