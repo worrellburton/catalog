@@ -126,6 +126,11 @@ interface ProductPageProps {
 // (white squares for opaque-bg logos, wrong-brand fallbacks for products
 // scraped from Google Shopping). Brand text is the reliable indicator.
 
+/** IntersectionObserver margin for attaching a rail tile's pooled <video>:
+ *  roughly half a screen ahead, so buffering starts before the tile scrolls
+ *  in without lighting up every below-the-fold tile on open. */
+const RAIL_ATTACH_MARGIN = '60% 0%';
+
 /** Compact video tile for the brand strip - small, shows a product image
  *  poster + brand/name caption so the tile is never blank, then swaps in
  *  the video once frames are decoded. Tap reuses the shared <video>
@@ -198,11 +203,6 @@ function BrandStripTile({ creative, onOpen }: { creative: ProductAd; onOpen: (c:
     </button>
   );
 }
-
-/** IntersectionObserver margin for attaching a rail tile's pooled <video>:
- *  roughly half a screen ahead, so buffering starts before the tile scrolls
- *  in without lighting up every below-the-fold tile on open. */
-const RAIL_ATTACH_MARGIN = '60% 0%';
 
 /** Look-creative tile for the "Featured in Looks" grid. Looks have video
  *  via the looks_creative join in services/looks.ts, mapped to look.video.
