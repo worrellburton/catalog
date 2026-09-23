@@ -93,7 +93,7 @@ export default function AdminCreators() {
                   <tr key={c.handle} onClick={() => navigate(`/admin/creators/${encodeURIComponent(c.handle)}`)} style={{ cursor: 'pointer' }}>
                     <td>
                       {c.avatar_url
-                        ? <img src={c.avatar_url} alt="" width={28} height={28} loading="lazy" style={{ borderRadius: '50%', verticalAlign: 'middle', marginRight: 8 }} />
+                        ? <img src={c.avatar_url} alt="" width={28} height={28} loading="lazy" style={{ borderRadius: '50%', objectFit: 'cover', verticalAlign: 'middle', marginRight: 8 }} />
                         : null}
                       {c.display_name}
                     </td>

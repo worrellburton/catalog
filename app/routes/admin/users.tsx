@@ -13,6 +13,8 @@ import { creators as lookCreators, looks } from '~/data/looks';
 import type { UserRole } from '~/types/roles';
 import { USER_ROLE_LABELS } from '~/types/roles';
 import AdminWaitlistPanel from '~/components/AdminWaitlistPanel';
+import ShopMyCreatorsPanel from '~/components/ShopMyCreatorsPanel';
+import { countShopMyCreators } from '~/services/creators';
 
 // Compact absolute date: "Aug 24" this year, "Aug 24, 2025" otherwise. The
 // year only earns its space when it carries information; the cell is also
@@ -102,9 +104,9 @@ function profileToRow(p: Profile): UserRow {
   };
 }
 
-type Tab = 'waitlist' | 'users' | 'shoppers' | 'admins' | 'ai';
+type Tab = 'waitlist' | 'users' | 'shoppers' | 'admins' | 'ai' | 'shopmy';
 
-const TAB_VALUES: readonly Tab[] = ['waitlist', 'users', 'shoppers', 'admins', 'ai'];
+const TAB_VALUES: readonly Tab[] = ['waitlist', 'users', 'shoppers', 'admins', 'ai', 'shopmy'];
 
 function isTab(value: string | null): value is Tab {
   return value !== null && (TAB_VALUES as readonly string[]).includes(value);
@@ -357,6 +359,8 @@ export default function AdminUsers() {
       return out;
     }, { replace: false });
   }, [setSearchParams]);
+  const [shopMyCount, setShopMyCount] = useState(0);
+  useEffect(() => { void countShopMyCreators().then(setShopMyCount); }, []);
   // Pass 2: seed from module cache so re-entering the page paints
   // with data immediately. Realtime + initial fetch refresh in place.
   const [allUsers, setAllUsers] = useState<UserRow[]>(() => cachedUsers ?? []);
@@ -1367,9 +1371,20 @@ export default function AdminUsers() {
             </button>
           </div>
         </div>
+        {/* External = imported people with no Catalog account (ShopMy
+            creators), each expandable to the products linked to them. */}
+        <div className="admin-tabs admin-users-tabs">
+          <span className="admin-users-tabs-label">External</span>
+          <div className="admin-tab-group">
+            <button className={`admin-tab ${activeTab === 'shopmy' ? 'active' : ''}`} onClick={() => setActiveTab('shopmy')}>
+              ShopMy{shopMyCount > 0 && <span className="admin-tab-count">{shopMyCount}</span>}
+            </button>
+          </div>
+        </div>
       </div>
 
       {activeTab === 'waitlist' && <AdminWaitlistPanel />}
+      {activeTab === 'shopmy' && <ShopMyCreatorsPanel />}
       {activeTab === 'users' && renderTable(users, userTable, 'User', { showAdminToggle: false, showPromoteButton: true })}
       {activeTab === 'shoppers' && renderTable(shoppersCreators, shoppersTable, 'User', { showAdminToggle: false, showPromoteButton: true })}
       {activeTab === 'admins' && renderTable(admins, adminTable, 'Admin', { showSuperToggle: true })}

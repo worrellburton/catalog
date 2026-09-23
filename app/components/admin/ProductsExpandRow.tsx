@@ -1,22 +1,38 @@
 // imports
 import { useEffect, useState } from 'react';
-import { listCrawlJobProducts, type CrawlJob, type CrawlJobProduct } from '~/services/site-crawls';
 
 // types
-interface CrawlProductsRowProps {
-  job: Pick<CrawlJob, 'id' | 'site_name'>;
+/** The fields the grid renders. Both CrawlJobProduct and the consumer
+ *  Product type satisfy it, so callers pass their rows straight through. */
+export interface ExpandProduct {
+  id?: string;
+  name: string;
+  brand: string;
+  price: string;
+  url: string;
+  image?: string | null;
+}
+
+interface ProductsExpandRowProps {
+  /** Fetches the products to list. Re-run whenever `loadKey` changes. */
+  load: () => Promise<ExpandProduct[]>;
+  loadKey: string;
   /** Number of columns in the parent table, so the panel spans the row. */
   colSpan: number;
+  /** Completes the heading "N products <verb>", e.g. "ingested". */
+  verb: string;
+  emptyText: string;
 }
 
 // main logic
 /**
- * Expandable table row under a crawl job listing every product the job
- * ingested (image, brand, name, price, link). Fetches on mount so a
- * collapsed row costs nothing; the parent decides when to render it.
+ * Expandable table row listing products (image, brand, name, price, link)
+ * under a parent row — a crawl job's ingested products, or a creator's
+ * linked ones. Fetches on mount so a collapsed row costs nothing; the
+ * parent decides when to render it.
  */
-export default function CrawlProductsRow({ job, colSpan }: CrawlProductsRowProps) {
-  const [products, setProducts] = useState<CrawlJobProduct[]>([]);
+export default function ProductsExpandRow({ load, loadKey, colSpan, verb, emptyText }: ProductsExpandRowProps) {
+  const [products, setProducts] = useState<ExpandProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,12 +40,12 @@ export default function CrawlProductsRow({ job, colSpan }: CrawlProductsRowProps
     let cancelled = false;
     setLoading(true);
     setError(null);
-    listCrawlJobProducts(job)
+    load()
       .then(rows => { if (!cancelled) setProducts(rows); })
       .catch((e: Error) => { if (!cancelled) setError(e.message || 'Failed to load products'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [job.id, job.site_name]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loadKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <tr className="admin-look-expanded-row open">
@@ -37,21 +53,19 @@ export default function CrawlProductsRow({ job, colSpan }: CrawlProductsRowProps
         <div className="admin-expand-animate">
           <div className="admin-look-products">
             <h3 className="admin-products-title">
-              {loading ? 'Products' : `${products.length} ${products.length === 1 ? 'product' : 'products'} ingested`}
+              {loading ? 'Products' : `${products.length} ${products.length === 1 ? 'product' : 'products'} ${verb}`}
             </h3>
             {loading ? (
               <div className="admin-empty" style={{ padding: '16px 0' }}>Loading products…</div>
             ) : error ? (
               <div className="admin-empty" style={{ padding: '16px 0', color: '#ef4444' }}>{error}</div>
             ) : products.length === 0 ? (
-              <div className="admin-empty" style={{ padding: '16px 0' }}>
-                No products are attributed to this crawl yet.
-              </div>
+              <div className="admin-empty" style={{ padding: '16px 0' }}>{emptyText}</div>
             ) : (
               <div className="admin-products-grid" style={{ padding: 0 }}>
-                {products.map(p => (
+                {products.map((p, i) => (
                   <a
-                    key={p.id}
+                    key={p.id ?? `${p.brand}::${p.name}::${i}`}
                     className="admin-product-card"
                     href={p.url || undefined}
                     target="_blank"

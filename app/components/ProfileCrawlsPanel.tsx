@@ -2,6 +2,7 @@ import { Fragment, useState, useEffect, useCallback } from 'react';
 import { catalogAlert, catalogConfirm } from '~/components/CatalogDialog';
 import {
   listCrawlJobs,
+  listCrawlJobProducts,
   createProfileCrawlJob,
   triggerProfileCrawl,
   deleteCrawlJob,
@@ -9,9 +10,10 @@ import {
   type CrawlJob,
 } from '~/services/site-crawls';
 import JobProgress from '~/components/JobProgress';
-import CrawlProductsRow from '~/components/admin/CrawlProductsRow';
+import ProductsExpandRow from '~/components/admin/ProductsExpandRow';
 import RerunAllStuckButton from '~/components/RerunAllStuckButton';
 import ShopMyIngest from '~/components/ShopMyIngest';
+import { findShopMyCreatorBySourceUrl, type ShopMyCreatorIdentity } from '~/services/creators';
 import { isStuck } from '~/utils/aiBudget';
 
 // Typical wall-clock for a profile crawl (single shopmy/ltk/linktree
@@ -145,8 +147,19 @@ export default function ProfileCrawlsPanel() {
   // Job whose ingested-products panel is open (one at a time).
   const [expandedId, setExpandedId] = useState<string | null>(null);
   // Set once the operator submits a ShopMy URL; hands off to <ShopMyIngest>,
-  // which owns preview, confirm, progress and the write.
-  const [shopMyUrl, setShopMyUrl] = useState<string | null>(null);
+  // which owns preview, confirm, progress and the write. `creator` is the
+  // identity an earlier import of the same URL wrote, so a re-run updates
+  // that creator instead of minting a second one under ShopMy's username.
+  const [shopMy, setShopMy] = useState<{ url: string; creator: ShopMyCreatorIdentity | null } | null>(null);
+
+  const openShopMy = async (url: string) => {
+    try {
+      setShopMy({ url, creator: await findShopMyCreatorBySourceUrl(url) });
+    } catch (e) {
+      // Proceeding blind could duplicate a creator the wizard renamed.
+      void catalogAlert({ title: 'Could not check for an existing creator', message: (e as Error).message });
+    }
+  };
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -186,7 +199,7 @@ export default function ProfileCrawlsPanel() {
 
   const handleAdd = async (url: string, name: string) => {
     if (isShopMyUrl(url)) {
-      setShopMyUrl(url);   // hand off to <ShopMyIngest>; it owns preview + confirm
+      await openShopMy(url);   // hand off to <ShopMyIngest>; it owns preview + confirm
       return;
     }
 
@@ -204,7 +217,7 @@ export default function ProfileCrawlsPanel() {
     // A ShopMy row must never be retried through the AI crawler — that's
     // the expensive path this feature exists to avoid.
     if (isShopMyUrl(job.site_url)) {
-      setShopMyUrl(job.site_url);
+      await openShopMy(job.site_url);
       return;
     }
     setBusyId(job.id);
@@ -237,7 +250,7 @@ export default function ProfileCrawlsPanel() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 8 }}>
         <p className="admin-page-subtitle" style={{ margin: 0 }}>
           Crawl a creator/curator profile (e.g. shopmy.us/drconnieyang) and ingest every
-          product they’ve linked, across all brands.
+          product they’ve linked, across all brands. ShopMy profiles also import the creator.
         </p>
         <div style={{ display: 'flex', gap: 8 }}>
           <RerunAllStuckButton
@@ -258,15 +271,19 @@ export default function ProfileCrawlsPanel() {
         </div>
       </div>
 
-      {shopMyUrl && (
+      {shopMy && (
         <ShopMyIngest
           // Force a fresh instance per URL — without this, retrying a
           // second ShopMy row while the panel is open reuses the prior
           // instance's job/landed/timer state (React only remounts on a
           // key change, not a prop change).
-          key={shopMyUrl}
-          url={shopMyUrl}
-          onClose={() => { setShopMyUrl(null); loadData(); }}
+          key={shopMy.url}
+          url={shopMy.url}
+          includeCreator
+          creatorHandle={shopMy.creator?.handle}
+          creatorDisplayName={shopMy.creator?.display_name}
+          creatorBio={shopMy.creator?.bio ?? undefined}
+          onClose={() => { setShopMy(null); loadData(); }}
           onDone={loadData}
         />
       )}
@@ -371,7 +388,15 @@ export default function ProfileCrawlsPanel() {
                     </div>
                   </td>
                 </tr>
-                {expandedId === j.id && <CrawlProductsRow job={j} colSpan={7} />}
+                {expandedId === j.id && (
+                  <ProductsExpandRow
+                    load={() => listCrawlJobProducts(j)}
+                    loadKey={`${j.id}:${j.site_name}`}
+                    colSpan={7}
+                    verb="ingested"
+                    emptyText="No products are attributed to this crawl yet."
+                  />
+                )}
                 </Fragment>
               ))}
             </tbody>
