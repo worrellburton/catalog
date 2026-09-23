@@ -74,3 +74,13 @@ export async function findShopMyCreatorBySourceUrl(url: string): Promise<ShopMyC
   if (error) throw new Error(error.message);
   return (data?.[0] as ShopMyCreatorIdentity | undefined) ?? null;
 }
+
+/** Tab badge count for Users › External › ShopMy. 0 on failure — a badge
+ *  is not worth an error state; the panel itself reports read failures. */
+export async function countShopMyCreators(): Promise<number> {
+  if (!supabase) return 0;
+  const { count, error } = await supabase.from('creators')
+    .select('handle', { count: 'exact', head: true })
+    .eq('source', 'shopmy');
+  return error ? 0 : count ?? 0;
+}

@@ -1,10 +1,13 @@
-// Agents › Indexers › Creators: creators imported from ShopMy (source='shopmy')
-// — external people with no Catalog account. Re-running a shop lives on the
-// Profiles tab (Retry), which keeps a wizard-edited handle/name/bio intact.
+// Users › External › ShopMy: creators imported from ShopMy (source='shopmy')
+// — external people with no Catalog account — each expandable to the
+// products linked to them. Re-running a shop lives on Agents › Indexers ›
+// Profiles (Retry), which keeps a wizard-edited handle/name/bio intact.
 
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { listAdminCreators, type AdminCreatorRow } from '~/services/creators';
+import { getImportedCreatorProducts } from '~/services/creator-products';
 import ShopMyImportWizard from '~/components/ShopMyImportWizard';
+import ProductsExpandRow from '~/components/admin/ProductsExpandRow';
 import { creatorSlug } from '~/utils/slug';
 
 export default function ShopMyCreatorsPanel() {
@@ -12,6 +15,8 @@ export default function ShopMyCreatorsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
+  // Creator whose linked-products panel is open (one at a time).
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -73,7 +78,8 @@ export default function ShopMyCreatorsPanel() {
             </thead>
             <tbody>
               {rows.map((c) => (
-                <tr key={c.handle}>
+                <Fragment key={c.handle}>
+                <tr>
                   <td style={{ fontWeight: 500 }}>
                     {c.avatar_url && (
                       <img src={c.avatar_url} alt="" width={28} height={28} loading="lazy"
@@ -93,7 +99,25 @@ export default function ShopMyCreatorsPanel() {
                       </a>
                     ) : ' - '}
                   </td>
-                  <td>{c.products}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="admin-recrawl-expand"
+                      onClick={() => setExpanded((prev) => (prev === c.handle ? null : c.handle))}
+                      aria-expanded={expanded === c.handle}
+                      title={expanded === c.handle ? 'Hide linked products' : 'Show linked products'}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: 0, background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', font: 'inherit' }}
+                    >
+                      <svg
+                        width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+                        style={{ transform: expanded === c.handle ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease', opacity: 0.6 }}
+                      >
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                      {c.products}
+                    </button>
+                  </td>
                   <td>{c.looks}</td>
                   <td className="admin-cell-muted">
                     {c.created_at
@@ -101,6 +125,16 @@ export default function ShopMyCreatorsPanel() {
                       : ' - '}
                   </td>
                 </tr>
+                {expanded === c.handle && (
+                  <ProductsExpandRow
+                    load={() => getImportedCreatorProducts(c.handle)}
+                    loadKey={c.handle}
+                    colSpan={6}
+                    verb="linked"
+                    emptyText="No products are linked to this creator yet."
+                  />
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>

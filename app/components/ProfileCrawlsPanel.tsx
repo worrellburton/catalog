@@ -2,6 +2,7 @@ import { Fragment, useState, useEffect, useCallback } from 'react';
 import { catalogAlert, catalogConfirm } from '~/components/CatalogDialog';
 import {
   listCrawlJobs,
+  listCrawlJobProducts,
   createProfileCrawlJob,
   triggerProfileCrawl,
   deleteCrawlJob,
@@ -9,7 +10,7 @@ import {
   type CrawlJob,
 } from '~/services/site-crawls';
 import JobProgress from '~/components/JobProgress';
-import CrawlProductsRow from '~/components/admin/CrawlProductsRow';
+import ProductsExpandRow from '~/components/admin/ProductsExpandRow';
 import RerunAllStuckButton from '~/components/RerunAllStuckButton';
 import ShopMyIngest from '~/components/ShopMyIngest';
 import { findShopMyCreatorBySourceUrl, type ShopMyCreatorIdentity } from '~/services/creators';
@@ -387,7 +388,15 @@ export default function ProfileCrawlsPanel() {
                     </div>
                   </td>
                 </tr>
-                {expandedId === j.id && <CrawlProductsRow job={j} colSpan={7} />}
+                {expandedId === j.id && (
+                  <ProductsExpandRow
+                    load={() => listCrawlJobProducts(j)}
+                    loadKey={`${j.id}:${j.site_name}`}
+                    colSpan={7}
+                    verb="ingested"
+                    emptyText="No products are attributed to this crawl yet."
+                  />
+                )}
                 </Fragment>
               ))}
             </tbody>
