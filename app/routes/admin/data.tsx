@@ -14,7 +14,18 @@ import { useNavigate, useSearchParams } from '@remix-run/react';
 import { extractFabric } from '~/utils/extractFabric';
 import ProductDetailsHover from '~/components/admin/ProductDetailsHover';
 import ProductHealthCell from '~/components/admin/ProductHealthCell';
-import MediaCompletionMeter from '~/components/admin/MediaCompletionMeter';
+import ProductMediaTile, { type MediaBusy } from '~/components/admin/ProductMediaTile';
+import ProductFilterBar from '~/components/admin/ProductFilterBar';
+import {
+  DEFAULT_PRODUCT_FILTERS,
+  matchesProductFilters,
+  productFacetCounts,
+  type DateFilterMode,
+  type FilterRow,
+  type ProductBucket,
+  type ProductFilterState,
+  type ProductStatus,
+} from '~/utils/product-filters';
 import { productHealth } from '~/utils/product-health';
 import { recheckProductLinks, type LinkCheckResult } from '~/services/link-health';
 import { looks as staticLooks, creators as staticCreators } from '~/data/looks';
@@ -470,9 +481,6 @@ function AddProductsModal({ onClose, onIngested, showToast, onPending }: AddProd
   );
 }
 
-/** Media-completion colours for the primary thumb border (3/3 · 1–2 · 0). */
-const MEDIA_LEVEL_COLOR = { ok: '#16a34a', warn: '#f59e0b', fail: '#ef4444' } as const;
-
 export default function AdminData() {
   // Live AI-prompt values from app_settings. Mirrored into state so the
   // generation-graph cards (Polish Primary, Primary Video) display the
@@ -522,6 +530,16 @@ export default function AdminData() {
       return p;
     }, { replace: true });
   }, [setSearchParams]);
+  // Drops the ?target / ?label seeding deep-link (and, with brand, the brand one).
+  const clearSeedTarget = useCallback((alsoBrand = false) => {
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      p.delete('target');
+      p.delete('label');
+      if (alsoBrand) p.delete('brand');
+      return p;
+    }, { replace: false });
+  }, [setSearchParams]);
 
   // Looks sub-filter: Published = curated catalog, Unpublished = looks that
   // shoppers / creators generated themselves via the /generate flow.
@@ -549,14 +567,22 @@ export default function AdminData() {
       return p;
     }, { replace: false });
   }, [setSearchParams]);
-  // Gender chip (All / Men / Women / Unisex) — composes with productFilter.
-  const [productGender, setProductGender] = useState<'all' | 'male' | 'female' | 'unisex'>('all');
-  const [productFilter, setProductFilter] = useState<'all' | 'no-creative' | 'active' | 'inactive' | 'untagged' | 'soft-deleted' | 'automatic' | 'seeded' | 'affiliate' | 'no-affiliate'>(
-    // Deep-link from /admin/seeding: ?tab=products&filters=seeding
-    // Default is the LIVE bucket — hidden rows are ~94% of the catalog and
-    // the working set is what shoppers can see.
-    () => (searchParams.get('filters') === 'seeding' ? 'seeded' : 'active'),
+  // Products filter bar: Status · Health · Audience segments plus one
+  // Filters-popover bucket and health issue, all composable (utils/product-filters).
+  // Default is the LIVE bucket — hidden rows are ~94% of the catalog and the
+  // working set is what shoppers can see. ?filters=seeding deep-links the
+  // seeding bucket across every status.
+  const [productFilters, setProductFilters] = useState<ProductFilterState>(
+    () => (searchParams.get('filters') === 'seeding'
+      ? { ...DEFAULT_PRODUCT_FILTERS, status: 'all', bucket: 'seeded' }
+      : DEFAULT_PRODUCT_FILTERS),
   );
+  const patchProductFilters = useCallback((patch: Partial<ProductFilterState>) => {
+    setProductFilters(prev => ({ ...prev, ...patch }));
+  }, []);
+  // Single-value view of the bar for the views keyed off one bucket
+  // (Automatic pipeline panel, Soft-delete hard-delete actions).
+  const productFilter: ProductBucket | ProductStatus = productFilters.bucket ?? productFilters.status;
   // Optional deep-link: ?target=<seed_target_id> narrows products to one seeding
   // target; ?label=<term> is just the display label for the filter chip.
   const seedTargetParam = searchParams.get('target');
@@ -570,40 +596,9 @@ export default function AdminData() {
   // into Date boundaries inside the predicate so the UI state
   // serializes cleanly into the URL later if we want shareable
   // filter links.
-  type DateFilterMode = 'all' | 'week' | 'month' | 'today' | 'before' | 'on' | 'after' | 'between';
   const [dateFilter, setDateFilter] = useState<DateFilterMode>('all');
   const [dateRefIso, setDateRefIso] = useState<string>('');
   const [dateRefIsoEnd, setDateRefIsoEnd] = useState<string>('');
-  const [datePopoverOpen, setDatePopoverOpen] = useState(false);
-  const datePopoverRef = useRef<HTMLDivElement | null>(null);
-  // "More filters" dropdown on the Products tab (secondary buckets + date).
-  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
-  const moreFiltersRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (!moreFiltersOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (moreFiltersRef.current && !moreFiltersRef.current.contains(e.target as Node)) setMoreFiltersOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [moreFiltersOpen]);
-  // Close on click-away or Escape so the popover doesn't sit stuck
-  // open when the admin clicks back into a row.
-  useEffect(() => {
-    if (!datePopoverOpen) return;
-    const onClick = (e: MouseEvent) => {
-      if (datePopoverRef.current && !datePopoverRef.current.contains(e.target as Node)) {
-        setDatePopoverOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDatePopoverOpen(false); };
-    document.addEventListener('mousedown', onClick);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onClick);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [datePopoverOpen]);
 
   // Pre-compute the rolling window boundaries once per render so the
   // memoised filter doesn't re-instantiate Date objects per row.
@@ -648,9 +643,6 @@ export default function AdminData() {
     }
   }, [dateFilter, dateWindow]);
 
-  const moreFiltersActive =
-    (['no-creative', 'untagged', 'affiliate', 'no-affiliate', 'automatic', 'seeded', 'soft-deleted'].includes(productFilter) ? 1 : 0)
-    + (dateFilter !== 'all' ? 1 : 0);
   const dateFilterLabel = useMemo(() => {
     switch (dateFilter) {
       case 'all':     return 'All time';
@@ -1347,6 +1339,9 @@ export default function AdminData() {
   // submit) until the background poll below detects status='done' or
   // 'failed' on the products row. pendingVideoTick is bumped after each
   // new submit so the poll re-binds and picks the new product up.
+  // Products whose clip just landed and whose poster (cut by a DB trigger)
+  // hasn't arrived yet → poll deadline. Lets the Media tile flip to 3/3.
+  const posterWatchRef = useRef<Map<string, number>>(new Map());
   const pendingVideoJobsRef = useRef<Map<string, { job: { id: string; finish: (ms?: number, msg?: string) => void; fail: (msg?: string) => void }; startedAt: number }>>(new Map());
   const [pendingVideoTick, setPendingVideoTick] = useState(0);
 
@@ -2021,7 +2016,7 @@ export default function AdminData() {
   }, [genJobs, loadAdProductIds]);
 
   const allProducts = useMemo(() => {
-    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; primary_image_url?: string | null; primary_image_polished?: boolean | null; primary_video_url?: string | null; primary_video_poster_url?: string | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; subtype?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null; seed_target_id?: string | null; size_fit?: string | null; materials_care?: string | null; haiku_context?: string | null; url_status?: number | null; url_checked_at?: string | null }>();
+    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; primary_image_url?: string | null; primary_image_polished?: boolean | null; primary_video_url?: string | null; primary_video_poster_url?: string | null; primary_video_status?: string | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; subtype?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null; seed_target_id?: string | null; size_fit?: string | null; materials_care?: string | null; haiku_context?: string | null; url_status?: number | null; url_checked_at?: string | null }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
@@ -2045,6 +2040,7 @@ export default function AdminData() {
       const polishedFlag = (cp as { primary_image_polished?: boolean | null }).primary_image_polished ?? false;
       const primaryVideoUrl = (cp as { primary_video_url?: string | null }).primary_video_url ?? null;
       const primaryVideoPosterUrl = (cp as { primary_video_poster_url?: string | null }).primary_video_poster_url ?? null;
+      const primaryVideoStatus = (cp as { primary_video_status?: string | null }).primary_video_status ?? null;
       if (productMap.has(key)) {
         const entry = productMap.get(key)!;
         entry.id = cp.id;
@@ -2054,6 +2050,7 @@ export default function AdminData() {
         entry.primary_image_polished = polishedFlag;
         entry.primary_video_url = primaryVideoUrl;
         entry.primary_video_poster_url = primaryVideoPosterUrl;
+        entry.primary_video_status = primaryVideoStatus;
         entry.video_urls = adVideoMap.get(cp.id) || [];
         entry.impressions = adImpressionsMap.get(cp.id) || 0;
         entry.clicks = adClicksMap.get(cp.id) || 0;
@@ -2091,6 +2088,7 @@ export default function AdminData() {
           primary_image_polished: polishedFlag,
           primary_video_url: primaryVideoUrl,
           primary_video_poster_url: primaryVideoPosterUrl,
+          primary_video_status: primaryVideoStatus,
           video_urls: adVideoMap.get(cp.id) || [],
           looks: new Set(),
           creators: new Set(),
@@ -2196,48 +2194,42 @@ export default function AdminData() {
   // the latest product URL set without re-running the interval.
   allProductsRef.current = allProducts;
 
+  // Rows that pass the filters set outside the bar (brand deep-link, seeding
+  // target, admin search, date added), each paired with the facts the bar's
+  // facets read. The bar's counts and the table both come from this.
+  const productFacetRows = useMemo(() => {
+    const brandKey = brandFilter?.toLowerCase() ?? null;
+    const out: Array<{ product: (typeof allProducts)[number]; facts: FilterRow }> = [];
+    for (const p of allProducts) {
+      if (seedTargetParam && p.seed_target_id !== seedTargetParam) continue;
+      if (brandKey && (p.brand || '').toLowerCase() !== brandKey) continue;
+      if (adminQuery && !`${p.brand} ${p.name}`.toLowerCase().includes(adminQuery)) continue;
+      if (!matchesDateFilter(p.created_at)) continue;
+      out.push({
+        product: p,
+        facts: {
+          isActive: p.is_active !== false,
+          deleted: deletedProductKeys.has(`${p.brand}-${p.name}`),
+          hasCreative: p.hasCreative,
+          gender: p.gender ?? null,
+          monetized: getProductAffiliateProviders(p as { brand: string | null; url: string | null })
+            .some(a => a.rateNumeric > 0 || a.connected),
+          automatic: p.source === AUTO_SOURCE,
+          seeded: p.source === SEED_SOURCE,
+          healthLevel: p.health.level,
+          issues: new Set(p.health.checks.filter(c => c.level !== 'ok').map(c => c.key)),
+        },
+      });
+    }
+    return out;
+  }, [allProducts, deletedProductKeys, adminQuery, brandFilter, matchesDateFilter, seedTargetParam]);
   const filteredProductsList = useMemo(
-    () => allProducts.filter(p => {
-      const key = `${p.brand}-${p.name}`;
-      // Soft-delete view: ONLY products in the soft-delete set.
-      // Other filters off (admins want to see every soft-deleted
-      // row regardless of active/creative/tag state).
-      if (productFilter === 'soft-deleted') {
-        if (!deletedProductKeys.has(key)) return false;
-        if (brandFilter && (p.brand || '').toLowerCase() !== brandFilter.toLowerCase()) return false;
-        if (adminQuery) {
-          const hay = `${p.brand} ${p.name}`.toLowerCase();
-          if (!hay.includes(adminQuery)) return false;
-        }
-        if (!matchesDateFilter(p.created_at)) return false;
-        return true;
-      }
-      if (productFilter === 'no-creative' && p.hasCreative) return false;
-      if (productFilter === 'active' && (p as any).is_active === false) return false;
-      if (productFilter === 'inactive' && (p as any).is_active !== false) return false;
-      if (productFilter === 'untagged' && p.gender != null) return false;
-      if (productGender !== 'all' && p.gender !== productGender) return false;
-      if (productFilter === 'affiliate' || productFilter === 'no-affiliate') {
-        const monetized = getProductAffiliateProviders(p as { brand: string | null; url: string | null })
-          .some(a => a.rateNumeric > 0 || a.connected);
-        if (productFilter === 'affiliate' && !monetized) return false;
-        if (productFilter === 'no-affiliate' && monetized) return false;
-      }
-      // Automatic view: only products added by the autonomous pipeline.
-      if (productFilter === 'automatic' && (p as { source?: string | null }).source !== AUTO_SOURCE) return false;
-      if (productFilter === 'seeded' && (p as { source?: string | null }).source !== SEED_SOURCE) return false;
-      if (seedTargetParam && (p as { seed_target_id?: string | null }).seed_target_id !== seedTargetParam) return false;
-      // Hide soft-deleted from every other view.
-      if (deletedProductKeys.has(key)) return false;
-      if (brandFilter && (p.brand || '').toLowerCase() !== brandFilter.toLowerCase()) return false;
-      if (adminQuery) {
-        const hay = `${p.brand} ${p.name}`.toLowerCase();
-        if (!hay.includes(adminQuery)) return false;
-      }
-      if (!matchesDateFilter(p.created_at)) return false;
-      return true;
-    }),
-    [allProducts, productFilter, productGender, deletedProductKeys, adminQuery, brandFilter, matchesDateFilter, seedTargetParam]
+    () => productFacetRows.filter(r => matchesProductFilters(r.facts, productFilters)).map(r => r.product),
+    [productFacetRows, productFilters],
+  );
+  const productFacetCountsNow = useMemo(
+    () => productFacetCounts(productFacetRows.map(r => r.facts), productFilters),
+    [productFacetRows, productFilters],
   );
   // sharedTableId opts this table into the cross-admin sort state in
   // app_settings — when one admin clicks a column header, every other
@@ -2276,7 +2268,7 @@ export default function AdminData() {
   // dep with optional chaining + a stable fallback string.
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [productFilter, productTable.sort?.key ?? null, productTable.sort?.direction ?? null, adminQuery]);
+  }, [productFilters, productTable.sort?.key ?? null, productTable.sort?.direction ?? null, adminQuery]);
 
   // IntersectionObserver to grow the window when the sentinel enters
   // viewport. rootMargin keeps things smooth - we expand before the
@@ -2377,6 +2369,8 @@ export default function AdminData() {
   // In-flight polish-primary-image calls, keyed by product id. Drives
   // the spinner overlay on the polish-wand affordance.
   const [polishingIds, setPolishingIds] = useState<Set<string>>(new Set());
+  // In-flight pick-primary-image calls (first step of Generate everything).
+  const [pickingIds, setPickingIds] = useState<Set<string>>(new Set());
   // Link re-checks in flight (per-row button + the Tools bulk run).
   const [recheckingIds, setRecheckingIds] = useState<Set<string>>(new Set());
   const applyLinkResults = useCallback((results: LinkCheckResult[]) => {
@@ -2429,9 +2423,9 @@ export default function AdminData() {
   // Product whose primary-video modal popup is currently open (click-to-zoom).
   const [primaryVideoModalProductId, setPrimaryVideoModalProductId] = useState<string | null>(null);
 
-  const polishPrimaryImage = useCallback(async (productId: string) => {
-    if (!supabase) return;
-    if (!productId) return;
+  const polishPrimaryImage = useCallback(async (productId: string): Promise<boolean> => {
+    if (!supabase) return false;
+    if (!productId) return false;
     setPolishingIds(prev => {
       const next = new Set(prev);
       next.add(productId);
@@ -2457,7 +2451,7 @@ export default function AdminData() {
         const msg = data?.error || error?.message || 'unknown';
         queueJob.fail(msg);
         showToast(`Polish failed: ${msg}`);
-        return;
+        return false;
       }
       // Reflect the new primary URL + polished flag locally so the UI
       // updates without a full refetch.
@@ -2475,10 +2469,12 @@ export default function AdminData() {
       }
       queueJob.finish((data as { duration_ms?: number })?.duration_ms, 'Polished');
       showToast('Primary image polished');
+      return true;
     } catch (err) {
       const msg = (err as Error).message || 'unknown';
       queueJob.fail(msg);
       showToast(`Polish failed: ${msg}`);
+      return false;
     } finally {
       setPolishingIds(prev => {
         const next = new Set(prev);
@@ -2816,6 +2812,53 @@ export default function AdminData() {
     }
   }, [showToast, crawledProducts]);
 
+  // ── Generate everything (Media tile) ────────────────────────────────
+  // Fills whichever media steps a product is missing, in order: pick a
+  // primary photo → polish it → render the primary video. The poster is
+  // cut from the video by the trg_products_generate_primary_poster DB
+  // trigger once the clip lands (the pending poll watches for it); a
+  // product that already has a video but no poster gets it regenerated.
+  // imageOnly stops after the polish (and re-polishes a polished image).
+  const generateFullMedia = useCallback(async (productId: string, imageOnly = false) => {
+    if (!supabase || !productId) return;
+    const product = crawledProducts.find(pp => pp.id === productId);
+    if (!product) return;
+    let hasPrimary = !!product.primary_image_url;
+    if (!hasPrimary) {
+      const imgs = [...(Array.isArray(product.images) ? product.images : [])];
+      if (product.image_url && !imgs.includes(product.image_url)) imgs.push(product.image_url);
+      if (imgs.length === 0) { showToast('No product photos to work from'); return; }
+      setPickingIds(prev => new Set(prev).add(productId));
+      try {
+        const { data, error } = await supabase.functions.invoke('pick-primary-image', {
+          body: { product_id: productId, name: product.name || '', brand: product.brand || '', image_urls: imgs },
+        });
+        const pickedUrl = (data as { picked_url?: string } | null)?.picked_url;
+        if (error || !data?.success || !pickedUrl) {
+          showToast(`Couldn't pick a primary photo: ${data?.error || error?.message || 'unknown'}`);
+          return;
+        }
+        setCrawledProducts(prev => prev.map(pp =>
+          pp.id === productId ? ({ ...pp, primary_image_url: pickedUrl, primary_image_polished: false } as CrawledProduct) : pp,
+        ));
+        hasPrimary = true;
+      } finally {
+        setPickingIds(prev => { const next = new Set(prev); next.delete(productId); return next; });
+      }
+    }
+    if (!hasPrimary) return;
+    if (imageOnly || !product.primary_image_polished || !product.primary_image_url) {
+      const ok = await polishPrimaryImage(productId);
+      if (!ok || imageOnly) return;
+    }
+    if (!product.primary_video_url) {
+      await generatePrimaryVideo(productId);
+    } else if (!product.primary_video_poster_url) {
+      await regeneratePoster(productId);
+    }
+  }, [crawledProducts, polishPrimaryImage, generatePrimaryVideo, regeneratePoster, showToast]);
+
+
   // Fetch the rolling-average ETA once. Empty pool → keep the 30s
   // default; a single past run is already meaningful so n=1 is fine.
   useEffect(() => {
@@ -2855,19 +2898,27 @@ export default function AdminData() {
   // when there's nothing pending.
   useEffect(() => {
     if (!supabase) return;
-    if (pendingVideoJobsRef.current.size === 0) return;
+    if (pendingVideoJobsRef.current.size === 0 && posterWatchRef.current.size === 0) return;
     let cancelled = false;
     const sb = supabase;
     const tick = async () => {
       if (cancelled) return;
-      const ids = Array.from(pendingVideoJobsRef.current.keys());
+      const now = Date.now();
+      for (const [id, deadline] of posterWatchRef.current) if (deadline < now) posterWatchRef.current.delete(id);
+      const ids = Array.from(new Set([...pendingVideoJobsRef.current.keys(), ...posterWatchRef.current.keys()]));
       if (ids.length === 0) return;
       const { data } = await sb
         .from('products')
-        .select('id, primary_video_status, primary_video_url')
+        .select('id, primary_video_status, primary_video_url, primary_video_poster_url')
         .in('id', ids);
       if (cancelled) return;
-      for (const row of (data || []) as Array<{ id: string; primary_video_status: string | null; primary_video_url: string | null }>) {
+      for (const row of (data || []) as Array<{ id: string; primary_video_status: string | null; primary_video_url: string | null; primary_video_poster_url: string | null }>) {
+        if (posterWatchRef.current.has(row.id) && row.primary_video_poster_url) {
+          posterWatchRef.current.delete(row.id);
+          setCrawledProducts(prev => prev.map(pp =>
+            pp.id === row.id ? ({ ...pp, primary_video_poster_url: row.primary_video_poster_url } as CrawledProduct) : pp,
+          ));
+        }
         const entry = pendingVideoJobsRef.current.get(row.id);
         if (!entry) continue;
         if (row.primary_video_status === 'done') {
@@ -2882,9 +2933,10 @@ export default function AdminData() {
           });
           setCrawledProducts(prev => prev.map(pp =>
             pp.id === row.id
-              ? ({ ...pp, primary_video_url: row.primary_video_url, primary_video_status: 'done' } as CrawledProduct)
+              ? ({ ...pp, primary_video_url: row.primary_video_url, primary_video_status: 'done', primary_video_poster_url: row.primary_video_poster_url } as CrawledProduct)
               : pp,
           ));
+          if (!row.primary_video_poster_url) posterWatchRef.current.set(row.id, Date.now() + 180_000);
         } else if (row.primary_video_status === 'failed') {
           entry.job.fail('Generation failed');
           pendingVideoJobsRef.current.delete(row.id);
@@ -4486,377 +4538,26 @@ export default function AdminData() {
       )}
       {activeTab === 'products' && !productsLoading && (
         <>
-          {brandFilter && (
-            <div className="admin-brand-filter-chip">
-              <span>Brand: <strong>{brandFilter}</strong></span>
-              <span className="admin-brand-filter-count">{filteredProductsList.length} product{filteredProductsList.length !== 1 ? 's' : ''}</span>
-              <button
-                className="admin-icon-btn"
-                title="Clear brand filter"
-                aria-label="Clear brand filter"
-                onClick={clearBrandFilter}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-              </button>
-            </div>
-          )}
-          {seedTargetParam && (
-            <div className="admin-brand-filter-chip">
-              <span>Seeding target: <strong>{seedLabel || 'selected'}</strong></span>
-              <span className="admin-brand-filter-count">{filteredProductsList.length} product{filteredProductsList.length !== 1 ? 's' : ''}</span>
-              <button
-                className="admin-icon-btn"
-                title="Clear target filter"
-                aria-label="Clear target filter"
-                onClick={() => setSearchParams(prev => { const p = new URLSearchParams(prev); p.delete('target'); p.delete('label'); return p; }, { replace: false })}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-              </button>
-            </div>
-          )}
-          <div className="admin-tabs" style={{ marginBottom: 12 }}>
-            {/* Soft-deleted products are excluded from every count
-                here — they only show up in the dedicated "Soft delete"
-                tab on the far right. softDeletedCount + the per-tab
-                filters use a single predicate to keep counts honest. */}
-            {(() => null)()}
-            <button
-              className={`admin-tab ${productFilter === 'all' ? 'active' : ''}`}
-              onClick={() => setProductFilter('all')}
-            >
-              Show all
-              <span className="admin-tab-badge">
-                {allProducts.filter(p => !deletedProductKeys.has(`${p.brand}-${p.name}`)).length}
-              </span>
-            </button>
-            <button
-              className={`admin-tab ${productFilter === 'active' ? 'active' : ''}`}
-              onClick={() => setProductFilter('active')}
-              title="Products currently shown on the feed"
-            >
-              Showing
-              <span className="admin-tab-badge">
-                {allProducts.filter(p =>
-                  (p as { is_active?: boolean }).is_active !== false
-                  && !deletedProductKeys.has(`${p.brand}-${p.name}`)
-                ).length}
-              </span>
-            </button>
-            <button
-              className={`admin-tab ${productFilter === 'inactive' ? 'active' : ''}`}
-              onClick={() => setProductFilter('inactive')}
-              title="Products hidden from the feed - often missing a URL, price, or creative"
-            >
-              Hidden
-              <span className="admin-tab-badge">
-                {allProducts.filter(p =>
-                  (p as { is_active?: boolean }).is_active === false
-                  && !deletedProductKeys.has(`${p.brand}-${p.name}`)
-                ).length}
-              </span>
-            </button>
-            {/* Gender — composes with whichever bucket is selected. */}
-            <span className="admin-tab-group" style={{ marginLeft: 8 }} role="group" aria-label="Gender">
-              {([['all', 'All'], ['male', 'Men'], ['female', 'Women'], ['unisex', 'Unisex']] as Array<[typeof productGender, string]>).map(([g, label]) => (
-                <button
-                  key={g}
-                  type="button"
-                  className={`admin-tab ${productGender === g ? 'active' : ''}`}
-                  onClick={() => setProductGender(g)}
-                >
-                  {label}
-                </button>
-              ))}
-            </span>
-            {/* Everything that isn't Show all / Showing / Hidden / gender lives
-                behind one More filters button, so the filter row is a single
-                line. The count shows how many of these are engaged. */}
-            <div ref={moreFiltersRef} style={{ position: 'relative', marginLeft: 'auto' }}>
-              <button
-                type="button"
-                className={`admin-tab ${moreFiltersActive > 0 ? 'active' : ''}`}
-                onClick={() => setMoreFiltersOpen(v => !v)}
-                aria-haspopup="menu"
-                aria-expanded={moreFiltersOpen}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-              >
-                More filters
-                {moreFiltersActive > 0 && <span className="admin-tab-badge">{moreFiltersActive}</span>}
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
-              </button>
-              {moreFiltersOpen && (
-                <div role="menu" className="admin-tools-menu admin-filters-menu">
-                <button
-                  className={`admin-tab ${productFilter === 'no-creative' ? 'active' : ''}`}
-                  onClick={() => setProductFilter('no-creative')}
-                >
-                  Show without creative
-                  <span className="admin-tab-badge">
-                    {allProducts.filter(p =>
-                      !p.hasCreative
-                      && !deletedProductKeys.has(`${p.brand}-${p.name}`)
-                    ).length}
-                  </span>
-                </button>
-                <button
-                  className={`admin-tab ${productFilter === 'untagged' ? 'active' : ''}`}
-                  onClick={() => setProductFilter('untagged')}
-                  title="Products missing a gender tag - leak into every shopper's feed because untagged products bypass the gender filter"
-                >
-                  Untagged
-                  <span className="admin-tab-badge">
-                    {allProducts.filter(p =>
-                      p.gender == null
-                      && !deletedProductKeys.has(`${p.brand}-${p.name}`)
-                    ).length}
-                  </span>
-                </button>
-                <button
-                  className={`admin-tab ${productFilter === 'affiliate' ? 'active' : ''}`}
-                  onClick={() => setProductFilter('affiliate')}
-                  title="Products whose link has a real affiliate program (tracked affiliate.com URL, known retailer, or brand program)"
-                >
-                  Affiliate links
-                  <span className="admin-tab-badge">
-                    {allProducts.filter(p =>
-                      !deletedProductKeys.has(`${p.brand}-${p.name}`)
-                      && getProductAffiliateProviders(p as { brand: string | null; url: string | null }).some(a => a.rateNumeric > 0 || a.connected)
-                    ).length}
-                  </span>
-                </button>
-                <button
-                  className={`admin-tab ${productFilter === 'no-affiliate' ? 'active' : ''}`}
-                  onClick={() => setProductFilter('no-affiliate')}
-                  title="Products with no detected affiliate program — clickouts still monetize through the Shopnomix wrapper, but there's no program-level link"
-                >
-                  No affiliate links
-                  <span className="admin-tab-badge">
-                    {allProducts.filter(p =>
-                      !deletedProductKeys.has(`${p.brand}-${p.name}`)
-                      && !getProductAffiliateProviders(p as { brand: string | null; url: string | null }).some(a => a.rateNumeric > 0 || a.connected)
-                    ).length}
-                  </span>
-                </button>
-                {/* Date-added filter. Spacer pushes it to the right edge of
-                    the tab row so it reads as a tool, not another category.
-                    Soft-delete tab follows it on the far right, styled red
-                    so the destructive bucket is visually unmistakable. */}
-                <div ref={datePopoverRef} style={{ position: 'relative' }}>
-                  <button
-                    type="button"
-                    className={`admin-tab ${dateFilter !== 'all' ? 'active' : ''}`}
-                    onClick={() => setDatePopoverOpen(v => !v)}
-                    title="Filter by when the product was added to the catalog"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                      <line x1="16" y1="2" x2="16" y2="6" />
-                      <line x1="8" y1="2" x2="8" y2="6" />
-                      <line x1="3" y1="10" x2="21" y2="10" />
-                    </svg>
-                    <span>Date added: {dateFilterLabel}</span>
-                    {dateFilter !== 'all' && (
-                      <span
-                        role="button"
-                        aria-label="Clear date filter"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDateFilter('all');
-                          setDateRefIso('');
-                          setDateRefIsoEnd('');
-                        }}
-                        style={{ marginLeft: 4, opacity: 0.7, cursor: 'pointer' }}
-                      >
-                        ×
-                      </span>
-                    )}
-                  </button>
-                  {datePopoverOpen && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: 'calc(100% + 6px)',
-                        right: 0,
-                        minWidth: 260,
-                        background: '#fff',
-                        border: '1px solid #e5e7eb',
-                        borderRadius: 12,
-                        boxShadow: '0 18px 50px rgba(0, 0, 0, 0.18)',
-                        padding: 12,
-                        zIndex: 30,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 8,
-                      }}
-                    >
-                      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#666' }}>
-                        Quick ranges
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                        {([
-                          ['all',   'All time'],
-                          ['today', 'Today'],
-                          ['week',  'This week'],
-                          ['month', 'This month'],
-                        ] as Array<[DateFilterMode, string]>).map(([mode, label]) => (
-                          <button
-                            key={mode}
-                            type="button"
-                            className={`admin-tab ${dateFilter === mode ? 'active' : ''}`}
-                            onClick={() => {
-                              setDateFilter(mode);
-                              setDateRefIso('');
-                              setDateRefIsoEnd('');
-                              setDatePopoverOpen(false);
-                            }}
-                            style={{ justifyContent: 'center' }}
-                          >
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#666', marginTop: 6 }}>
-                        Custom
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <select
-                          value={dateFilter === 'before' || dateFilter === 'on' || dateFilter === 'after' || dateFilter === 'between' ? dateFilter : 'on'}
-                          onChange={(e) => {
-                            const next = e.target.value as DateFilterMode;
-                            setDateFilter(next);
-                            if (next !== 'between') setDateRefIsoEnd('');
-                          }}
-                          style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13 }}
-                        >
-                          <option value="before">Before</option>
-                          <option value="on">On</option>
-                          <option value="after">After</option>
-                          <option value="between">Between</option>
-                        </select>
-                        <input
-                          type="date"
-                          value={dateRefIso}
-                          onChange={(e) => setDateRefIso(e.target.value)}
-                          style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13, flex: 1, minWidth: 0 }}
-                        />
-                      </div>
-                      {dateFilter === 'between' && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 12, color: '#666', width: 70, textAlign: 'right' }}>and</span>
-                          <input
-                            type="date"
-                            value={dateRefIsoEnd}
-                            onChange={(e) => setDateRefIsoEnd(e.target.value)}
-                            style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13, flex: 1, minWidth: 0 }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-                {/* Automatic — products discovered & added by the autonomous
-                    Claude + Gemini pipeline. AI accent (indigo + sparkle) so it
-                    reads as the auto bucket, not another plain category. */}
-                <button
-                  className={`admin-tab ${productFilter === 'automatic' ? 'active' : ''}`}
-                  onClick={() => setProductFilter('automatic')}
-                  title="Products added automatically by the Claude + Gemini pipeline"
-                  style={{
-                    marginLeft: 8,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    background: productFilter === 'automatic' ? '#4f46e5' : '#eef2ff',
-                    color: productFilter === 'automatic' ? '#fff' : '#4338ca',
-                    border: `1px solid ${productFilter === 'automatic' ? '#4338ca' : '#c7d2fe'}`,
-                    fontWeight: 600,
-                  }}
-                >
-                  <svg width="13" height="13" viewBox="0 0 100 100" fill="currentColor" aria-hidden="true">
-                    <path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" />
-                  </svg>
-                  Automatic
-                  <span
-                    className="admin-tab-badge"
-                    style={{
-                      background: productFilter === 'automatic' ? 'rgba(255,255,255,0.22)' : '#c7d2fe',
-                      color: productFilter === 'automatic' ? '#fff' : '#3730a3',
-                    }}
-                  >
-                    {allProducts.filter(p =>
-                      (p as { source?: string | null }).source === AUTO_SOURCE
-                      && !deletedProductKeys.has(`${p.brand}-${p.name}`)
-                    ).length}
-                  </span>
-                </button>
-                {/* Seeded — products fetched by the demand-driven Seeding loop
-                    (/admin/seeding). Teal accent so it reads as its own bucket. */}
-                <button
-                  className={`admin-tab ${productFilter === 'seeded' ? 'active' : ''}`}
-                  onClick={() => setProductFilter('seeded')}
-                  title="Products fetched by the Seeding loop (/admin/seeding)"
-                  style={{
-                    marginLeft: 8,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    background: productFilter === 'seeded' ? '#0d9488' : '#ccfbf1',
-                    color: productFilter === 'seeded' ? '#fff' : '#0f766e',
-                    border: `1px solid ${productFilter === 'seeded' ? '#0f766e' : '#99f6e4'}`,
-                    fontWeight: 600,
-                  }}
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                    <path d="M12 2v8M12 10c-3 0-5 2-5 5M12 10c3 0 5 2 5 5M5 22h14M12 13v9" />
-                  </svg>
-                  Seeded
-                  <span
-                    className="admin-tab-badge"
-                    style={{
-                      background: productFilter === 'seeded' ? 'rgba(255,255,255,0.22)' : '#99f6e4',
-                      color: productFilter === 'seeded' ? '#fff' : '#0f766e',
-                    }}
-                  >
-                    {allProducts.filter(p =>
-                      (p as { source?: string | null }).source === SEED_SOURCE
-                      && !deletedProductKeys.has(`${p.brand}-${p.name}`)
-                    ).length}
-                  </span>
-                </button>
-                {/* Soft delete — far-right destructive bucket, styled red
-                    so it never reads as a normal filter category. */}
-                <button
-                  className={`admin-tab admin-tab--danger ${productFilter === 'soft-deleted' ? 'active' : ''}`}
-                  onClick={() => setProductFilter('soft-deleted')}
-                  title="Soft-deleted products. Open this bucket to permanently hard-delete (removes the row + analytics)."
-                  style={{
-                    marginLeft: 8,
-                    background: productFilter === 'soft-deleted' ? '#dc2626' : '#fee2e2',
-                    color: productFilter === 'soft-deleted' ? '#fff' : '#b91c1c',
-                    border: `1px solid ${productFilter === 'soft-deleted' ? '#b91c1c' : '#fecaca'}`,
-                    fontWeight: 600,
-                  }}
-                >
-                  Soft delete
-                  <span
-                    className="admin-tab-badge"
-                    style={{
-                      background: productFilter === 'soft-deleted' ? 'rgba(255,255,255,0.22)' : '#fecaca',
-                      color: productFilter === 'soft-deleted' ? '#fff' : '#991b1b',
-                    }}
-                  >
-                    {allProducts.filter(p => deletedProductKeys.has(`${p.brand}-${p.name}`)).length}
-                  </span>
-                </button>
-                </div>
-              )}
-            </div>
-          </div>
+          <ProductFilterBar
+            state={productFilters}
+            counts={productFacetCountsNow}
+            shown={filteredProductsList.length}
+            onChange={patchProductFilters}
+            onClearAll={() => {
+              setProductFilters(DEFAULT_PRODUCT_FILTERS);
+              setDateFilter('all');
+              setDateRefIso('');
+              setDateRefIsoEnd('');
+              if (seedTargetParam) clearSeedTarget(true);
+              else if (brandFilter) clearBrandFilter();
+            }}
+            date={{ mode: dateFilter, refIso: dateRefIso, refIsoEnd: dateRefIsoEnd, setMode: setDateFilter, setRefIso: setDateRefIso, setRefIsoEnd: setDateRefIsoEnd }}
+            dateLabel={dateFilterLabel}
+            contextChips={[
+              ...(brandFilter ? [{ key: 'brand', label: `Brand: ${brandFilter}`, onClear: clearBrandFilter }] : []),
+              ...(seedTargetParam ? [{ key: 'target', label: `Seeding: ${seedLabel || 'target'}`, onClear: () => clearSeedTarget() }] : []),
+            ]}
+          />
         {/* Automatic view — Add Products (count picker) + live pipeline
             progress. Only shown on the Automatic tab. */}
         {productFilter === 'automatic' && (
@@ -5658,226 +5359,30 @@ export default function AdminData() {
                       Empty box when the picker hasn't run yet, with
                       a subtle hint to expand. */}
                   <td onClick={(e) => e.stopPropagation()}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     {(() => {
-                      const primary = (p as { primary_image_url?: string | null }).primary_image_url;
-                      const polished = (p as { primary_image_polished?: boolean | null }).primary_image_polished === true;
-                      const polishing = p.id ? polishingIds.has(p.id) : false;
-                      if (primary) {
-                        return (
-                          <div style={{ position: 'relative', width: 44, height: 44 }}>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenCreativeRow(detailOpen ? null : rowKey);
-                              }}
-                              title="Primary image — click to expand the photo gallery and override"
-                              style={{
-                                width: 44, height: 44, borderRadius: 6, padding: 0,
-                                border: `2px solid ${MEDIA_LEVEL_COLOR[p.health.media.level]}`,
-                                boxShadow: `0 0 0 1px ${MEDIA_LEVEL_COLOR[p.health.media.level]}`,
-                                cursor: 'pointer', background: '#fff', overflow: 'hidden',
-                                display: 'block',
-                              }}
-                            >
-                              <img src={primary} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                            </button>
-                            {!polished && p.id && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (!polishing && p.id) polishPrimaryImage(p.id);
-                                }}
-                                disabled={polishing}
-                                title={polishing ? 'Polishing primary image…' : 'Polish — reframe into uniform 3:4 packshot'}
-                                style={{
-                                  position: 'absolute',
-                                  bottom: -4,
-                                  right: -4,
-                                  width: 18,
-                                  height: 18,
-                                  borderRadius: 999,
-                                  padding: 0,
-                                  border: '1px solid #fff',
-                                  background: polishing ? '#94a3b8' : '#7c3aed',
-                                  color: '#fff',
-                                  cursor: polishing ? 'wait' : 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
-                                }}
-                              >
-                                {polishing ? (
-                                  <span style={{
-                                    width: 9, height: 9, border: '1.5px solid rgba(255,255,255,0.4)',
-                                    borderTopColor: '#fff', borderRadius: '50%',
-                                    animation: 'wallet-spin 0.7s linear infinite',
-                                  }} />
-                                ) : (
-                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                                    <path d="M5 19l6-6" />
-                                    <path d="M12 5l1.5 3 3 1.5-3 1.5L12 14l-1.5-3-3-1.5 3-1.5L12 5z" />
-                                  </svg>
-                                )}
-                              </button>
-                            )}
-                          </div>
-                        );
-                      }
+                      const busy: MediaBusy = !p.id ? null
+                        : pickingIds.has(p.id) ? 'pick'
+                        : polishingIds.has(p.id) ? 'polish'
+                        : generatingPrimaryVideoIds.has(p.id) ? 'video'
+                        : (p.primary_video_status === 'pending' || genJobs.has(p.id)) ? 'rendering'
+                        : regeneratingPosterIds.has(p.id) ? 'poster'
+                        : null;
                       return (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenCreativeRow(detailOpen ? null : rowKey);
-                          }}
-                          title="No primary picked yet — open the gallery to set one"
-                          style={{
-                            width: 44, height: 44, borderRadius: 6,
-                            border: '1px dashed #cbd5e1', background: '#f8fafc',
-                            color: '#94a3b8', fontSize: 18, cursor: 'pointer', padding: 0,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          }}
-                        >
-                          ☆
-                        </button>
+                        <ProductMediaTile
+                          media={p.health.media}
+                          imageUrl={p.primary_image_url || p.image_url || rowImages[0] || null}
+                          videoUrl={p.primary_video_url ?? null}
+                          posterUrl={p.primary_video_poster_url ?? null}
+                          videoFailed={p.primary_video_status === 'failed'}
+                          busy={busy}
+                          fallbackLogo={getBrandLogo(p.brand) || null}
+                          canGenerate={!!p.id && (rowImages.length > 0 || !!p.primary_image_url)}
+                          onOpen={() => setOpenCreativeRow(detailOpen ? null : rowKey)}
+                          onGenerateAll={() => { if (p.id) void generateFullMedia(p.id); }}
+                          onGenerateImage={() => { if (p.id) void generateFullMedia(p.id, true); }}
+                        />
                       );
                     })()}
-                    {(() => {
-                      const primaryVideoUrl   = (p as { primary_video_url?: string | null }).primary_video_url ?? null;
-                      const primaryImageUrl   = (p as { primary_image_url?: string | null }).primary_image_url ?? null;
-                      const primaryStatus     = (p as { primary_video_status?: string | null }).primary_video_status ?? null;
-                      const isGenerating      = p.id && genJobs.has(p.id);
-                      const isPending         = primaryStatus === 'pending';
-                      const hasFailed         = primaryStatus === 'failed';
-                      // Active inline progress bar from a bulk job in the
-                      // legacy creative pipeline — keep showing it so admins
-                      // can track those runs alongside primary-video runs.
-                      if (isGenerating) {
-                        const job = genJobs.get(p.id!)!;
-                        const pct = Math.max(5, Math.round((job.done / job.total) * 100));
-                        const label = job.generating > 0
-                          ? `Generating ${job.done}/${job.total}`
-                          : job.done < job.total ? `Queued ${job.done}/${job.total}` : `Finalizing…`;
-                        return (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 110 }}>
-                            <div style={{ fontSize: 10, fontWeight: 600, color: '#111', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                              {label}
-                            </div>
-                            <div style={{ position: 'relative', height: 4, borderRadius: 4, background: '#e2e8f0', overflow: 'hidden' }}>
-                              <div style={{ position: 'absolute', inset: 0, width: `${pct}%`, background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)', transition: 'width 400ms ease' }} />
-                              {job.generating > 0 && (
-                                <div className="admin-shimmer" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent)', animation: 'admin-shimmer 1.4s infinite' }} />
-                              )}
-                            </div>
-                          </div>
-                        );
-                      }
-                      // No primary, no cloud id → brand logo placeholder.
-                      if (!primaryVideoUrl && !primaryImageUrl && !p.id) {
-                        return (
-                          <img
-                            src={getBrandLogo(p.brand) || ''}
-                            alt={p.brand}
-                            className="admin-brand-logo"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                          />
-                        );
-                      }
-                      // Status dot — green=done, amber pulse=pending, red=failed,
-                      // grey=not started. Pinned bottom-right of the thumb.
-                      const statusDot = primaryVideoUrl
-                        ? { color: '#22c55e', title: 'Primary video ready', pulse: false }
-                        : isPending
-                          ? { color: '#f59e0b', title: 'Rendering in background…', pulse: true }
-                          : hasFailed
-                            ? { color: '#ef4444', title: 'Last generation failed', pulse: false }
-                            : { color: '#cbd5e1', title: 'No primary video yet', pulse: false };
-                      return (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // No primary content yet → if we have a cloud id,
-                            // act as the Generate entry point. Otherwise open
-                            // the detail row.
-                            if (!primaryVideoUrl && !primaryImageUrl && p.id) {
-                              if (p.id) generatePrimaryVideo(p.id);
-                              return;
-                            }
-                            setOpenCreativeRow(detailOpen ? null : rowKey);
-                          }}
-                          title={primaryVideoUrl
-                            ? 'Primary video — click to expand'
-                            : (isPending ? 'Rendering in background — webhook updates this when ready' : (hasFailed ? 'Last generation failed — click to expand and retry' : 'No primary video yet — click to generate'))}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 8,
-                            padding: 4, border: `1px solid ${detailOpen ? '#3b82f6' : '#e5e7eb'}`,
-                            background: detailOpen ? '#eef4ff' : '#fff',
-                            borderRadius: 8, cursor: 'pointer',
-                          }}
-                        >
-                          <div style={{ position: 'relative', width: 30, height: 40, borderRadius: 6, overflow: 'hidden', background: '#f1f5f9', flexShrink: 0 }}>
-                            {primaryVideoUrl ? (
-                              <video
-                                src={primaryVideoUrl}
-                                poster={primaryImageUrl || undefined}
-                                autoPlay muted loop playsInline preload="metadata"
-                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                              />
-                            ) : isPending && primaryImageUrl ? (
-                              // Rendering in background — show the source image
-                              // dimmed as a poster preview (a real video is on
-                              // its way; the shimmer + amber dot signal pending).
-                              <img
-                                src={primaryImageUrl}
-                                alt={p.name}
-                                style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'saturate(0.7) brightness(0.9)' }}
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                              />
-                            ) : (
-                              // No primary video yet — show a clear "no video"
-                              // film icon, NOT the product image (which read as
-                              // if a video already existed).
-                              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', background: '#f8fafc' }}>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                  <path d="m22 8-6 4 6 4V8Z" />
-                                  <rect x="2" y="6" width="14" height="12" rx="2" ry="2" />
-                                </svg>
-                              </div>
-                            )}
-                            {isPending && (
-                              // Shimmering overlay while the webhook is pending.
-                              <div style={{
-                                position: 'absolute', inset: 0, pointerEvents: 'none',
-                                background: 'linear-gradient(90deg, transparent, rgba(245,158,11,0.32), transparent)',
-                                animation: 'admin-shimmer 1.4s infinite',
-                              }} />
-                            )}
-                            <span
-                              aria-hidden="true"
-                              title={statusDot.title}
-                              style={{
-                                position: 'absolute', right: 2, bottom: 2,
-                                width: 8, height: 8, borderRadius: '50%',
-                                background: statusDot.color,
-                                border: '1.5px solid #fff',
-                                boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
-                                animation: statusDot.pulse ? 'admin-status-dot-pulse 1.4s ease-in-out infinite' : undefined,
-                              }}
-                            />
-                            <style>{`@keyframes admin-status-dot-pulse {
-                              0%, 100% { opacity: 1; transform: scale(1); }
-                              50%      { opacity: 0.55; transform: scale(0.85); }
-                            }`}</style>
-                          </div>
-                        </button>
-                      );
-                    })()}
-                    </div>
-                    {p.id && <MediaCompletionMeter media={p.health.media} />}
                   </td>
                   <td style={{ textAlign: 'left' }} onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 160 }}>
