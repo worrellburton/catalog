@@ -321,6 +321,7 @@ export default defineConfig({
             route("users", "routes/admin/users.tsx");
             route("user/:name", "routes/admin/user.$name.tsx");
             route("brand/:name", "routes/admin/brand.$name.tsx");
+            route("product/:id", "routes/admin/product.$id.tsx");
             route("style", "routes/admin/style.tsx");
             // Phase 4: stylist roster + analytics + application queue.
             route("stylists", "routes/admin/stylists.tsx");
