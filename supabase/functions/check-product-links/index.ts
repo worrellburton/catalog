@@ -25,6 +25,17 @@
 //
 // Triggered by cron 'pipeline-link-health' (see migration
 // 20260729000006_link_health.sql) via a service-role bearer token.
+//
+// ON DEMAND: POST { "ids": ["<product uuid>", …] } (max 100) checks exactly
+// those products — the admin Data → Products Health column's "Re-check link"
+// and the Tools menu's bulk re-check. The response carries each result so the
+// table updates without a reload. No body = the rotating cron batch.
+//
+// SOFT 404s: a retired product page often 301s to the homepage or a search /
+// "not found" page, which then answers 200 and used to read as live. When the
+// redirect chain lands on the site root or a search/not-found path while the
+// original URL pointed at a deeper page, the product is recorded as -3
+// (redirected_away) — link_health_summary() buckets it with 'dead'.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { urlAllowed } from '../_shared/ssrf-guard.ts';
@@ -50,6 +61,16 @@ const FETCH_TIMEOUT_MS = 15_000;
 // or "the network never answered" with a genuine dead link (404/410/etc).
 const STATUS_BLOCKED_BY_POLICY = -1;
 const STATUS_UNREACHABLE = -2;
+const STATUS_REDIRECTED_AWAY = -3;
+const MAX_IDS = 100;
+
+// A landing path that means "this product is gone": the site root, or a
+// search / not-found / 404 page.
+const DEAD_END_PATH = /(^\/?$)|\/(search|s|404|not-?found|page-?not-?found|error)(\/|$|\?)|[?&](q|query|searchterm)=/i;
+
+function isDeepPath(u: URL): boolean {
+  return u.pathname.replace(/\/+$/, '').split('/').filter(Boolean).length >= 1;
+}
 
 // Returns the HTTP status of the product URL, STATUS_BLOCKED_BY_POLICY if it
 // (or a redirect hop) failed SSRF validation, or STATUS_UNREACHABLE if the
@@ -58,6 +79,8 @@ const STATUS_UNREACHABLE = -2;
 async function checkLinkStatus(rawUrl: string, signal: AbortSignal): Promise<number> {
   let target = urlAllowed(rawUrl);
   if (!target) return STATUS_BLOCKED_BY_POLICY; // non-https or private/loopback host - never fetched
+  const origin = target;
+  let redirected = false;
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     const res = await fetch(target.href, {
@@ -74,29 +97,49 @@ async function checkLinkStatus(rawUrl: string, signal: AbortSignal): Promise<num
       const next = urlAllowed(new URL(loc, target.href).href);
       if (!next) return STATUS_BLOCKED_BY_POLICY; // redirect target failed SSRF check
       target = next;
+      redirected = true;
       continue;
+    }
+    // Soft 404: a deep product URL that redirected onto the root or a search /
+    // not-found page is gone, whatever status the landing page answers with.
+    if (redirected && res.status < 400 && isDeepPath(origin)
+        && DEAD_END_PATH.test(target.pathname + target.search)
+        && !DEAD_END_PATH.test(origin.pathname + origin.search)) {
+      return STATUS_REDIRECTED_AWAY;
     }
     return res.status;
   }
   return STATUS_UNREACHABLE;
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req: Request) => {
   const admin = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   );
 
-  const { data: rows } = await admin
-    .from('products')
-    .select('id, url')
-    .eq('is_active', true)
-    .not('url', 'is', null)
-    .order('url_checked_at', { ascending: true, nullsFirst: true })
-    .limit(BATCH_SIZE);
+  // On-demand ids (admin re-check) or the rotating batch (cron / empty body).
+  let ids: string[] = [];
+  if (req.method === 'POST') {
+    try {
+      const body = await req.json() as { ids?: unknown };
+      if (Array.isArray(body.ids)) {
+        ids = body.ids.filter((x): x is string => typeof x === 'string' && /^[0-9a-f-]{36}$/i.test(x)).slice(0, MAX_IDS);
+      }
+    } catch { /* no / non-JSON body → rotating batch */ }
+  }
+
+  const query = admin.from('products').select('id, url').not('url', 'is', null);
+  const { data: rows } = ids.length > 0
+    ? await query.in('id', ids)
+    : await query
+      .eq('is_active', true)
+      .order('url_checked_at', { ascending: true, nullsFirst: true })
+      .limit(BATCH_SIZE);
 
   const queue = [...(rows ?? [])];
   let checked = 0;
+  const results: Array<{ id: string; url_status: number; url_checked_at: string }> = [];
 
   async function worker() {
     for (;;) {
@@ -114,9 +157,11 @@ Deno.serve(async () => {
       } catch {
         status = STATUS_UNREACHABLE; // timeout / DNS / abort - one bad URL must never kill the run
       }
+      const checkedAt = new Date().toISOString();
       await admin.from('products')
-        .update({ url_status: status, url_checked_at: new Date().toISOString() })
+        .update({ url_status: status, url_checked_at: checkedAt })
         .eq('id', r.id);
+      results.push({ id: r.id as string, url_status: status, url_checked_at: checkedAt });
       checked++;
     }
   }
@@ -125,7 +170,7 @@ Deno.serve(async () => {
   // than the whole batch.
   await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
 
-  return new Response(JSON.stringify({ checked }), {
+  return new Response(JSON.stringify({ checked, results }), {
     headers: { 'Content-Type': 'application/json' },
   });
 });

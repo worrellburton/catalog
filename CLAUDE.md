@@ -1411,6 +1411,7 @@ of truth. Migration numbers are sequential (most recent: `019_…`).
 | `manage-looks` | Look CRUD (service-role, JWT-auth'd) | — |
 | `scrape-product` | URL → product scrape | — |
 | `generate-type-icons` | Draws/improves SVG line icons for `product_types` (pg_cron re-runs it daily at 10:00 UTC ≈ 6 a.m. ET, mode `improve`) | `ANTHROPIC_API_KEY` |
+| `check-product-links` | Link health: writes `products.url_status` / `url_checked_at`. Cron `pipeline-link-health` runs the 150 least-recently-checked daily at 05:00 UTC; `POST {"ids": [...]}` (≤100) checks specific products — the admin Data → Products Health column's Re-check. Sentinels: -1 not fetched (policy), -2 no response, -3 redirected to home/search (soft 404); 403/429 = retailer blocks bots | — |
 
 Source lives under `supabase/functions/<name>/index.ts`. Prefer
 `mcp__supabase__deploy_edge_function` over the CLI.

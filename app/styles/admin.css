@@ -7280,3 +7280,144 @@ html.eq-page .gen-queue-host { display: none; }
 .admin-featured-toggle:hover { color: #f59e0b; background: rgba(245, 158, 11, 0.08); }
 .admin-featured-toggle.is-on { color: #f59e0b; }
 .admin-featured-toggle:disabled { opacity: 0.5; cursor: default; }
+
+/* ── Data → Products: Health column + media completion meter ───────────── */
+.admin-health {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  cursor: help;
+  outline: none;
+}
+.admin-health-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.admin-health--ok .admin-health-pill { background: #dcfce7; color: #166534; }
+.admin-health--warn .admin-health-pill { background: #fef3c7; color: #92400e; }
+.admin-health--fail .admin-health-pill { background: #fee2e2; color: #991b1b; }
+.admin-health-count {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.08);
+  font-size: 10px;
+  text-align: center;
+}
+.admin-health-dots { display: inline-flex; gap: 4px; padding-left: 2px; }
+.admin-health-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.admin-health-dot.is-ok { background: #22c55e; }
+.admin-health-dot.is-warn { background: #f59e0b; }
+.admin-health-dot.is-fail { background: #ef4444; }
+.admin-health-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: -8px;
+  z-index: 40;
+  width: 320px;
+  padding: 12px 14px;
+  background: #1f2937;
+  color: #f9fafb;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.admin-health-panel::before { content: ''; position: absolute; left: 0; right: 0; top: -8px; height: 8px; }
+.admin-health:hover .admin-health-panel,
+.admin-health:focus-visible .admin-health-panel,
+.admin-health:has(:focus-visible) .admin-health-panel {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.admin-health-row {
+  display: grid;
+  grid-template-columns: 10px 92px 1fr;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 0;
+}
+.admin-health-row + .admin-health-row { border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.admin-health-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af; }
+.admin-health-detail { color: #f9fafb; }
+.admin-health-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  color: #9ca3af;
+  font-size: 11px;
+}
+.admin-health-recheck {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f9fafb;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.admin-health-recheck:hover:not(:disabled) { background: rgba(255, 255, 255, 0.14); }
+.admin-health-recheck:disabled { opacity: 0.6; cursor: wait; }
+.admin-health-note { margin: 8px 0 0; color: #d1d5db; font-size: 11px; }
+
+.admin-media-meter {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 5px;
+}
+.admin-media-meter-seg {
+  width: 16px;
+  height: 4px;
+  border-radius: 2px;
+  background: #e5e7eb;
+}
+.admin-media-meter.is-ok .admin-media-meter-seg.is-done { background: #22c55e; }
+.admin-media-meter.is-warn .admin-media-meter-seg.is-done { background: #f59e0b; }
+.admin-media-meter-count {
+  margin-left: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.admin-media-meter.is-ok .admin-media-meter-count { color: #16a34a; }
+.admin-media-meter.is-warn .admin-media-meter-count { color: #b45309; }
+.admin-media-meter.is-fail .admin-media-meter-count { color: #dc2626; }
+.admin-brand-link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+}
+.admin-brand-link:hover { text-decoration: underline; }

@@ -84,6 +84,18 @@ export default function GovernanceTypeCell({
     const norm = normalizeTypeName(type);
     return tree.find(n => normalizeTypeName(n.name) === norm) ?? null;
   }, [tree, type]);
+  // The taxonomy icon for the chip: the subtype's own node when it has one,
+  // else the type's, else the nearest ancestor that has been drawn.
+  const iconPath = useMemo(() => {
+    const byId = new Map(tree.map(n => [n.id, n]));
+    const subNode = subtype
+      ? tree.find(n => normalizeTypeName(n.name) === normalizeTypeName(subtype)) ?? null
+      : null;
+    for (let n: TypeNode | null | undefined = subNode?.iconPath ? subNode : match; n; n = n.parentId ? byId.get(n.parentId) : null) {
+      if (n.iconPath) return n.iconPath;
+    }
+    return null;
+  }, [tree, match, subtype]);
 
   // Derivation signals — what each source thinks this product is.
   const inference = useMemo(() => explainProductTypeInference(name), [name]);
@@ -140,12 +152,21 @@ export default function GovernanceTypeCell({
           color: match ? '#334155' : type ? '#92400e' : '#cbd5e1',
         }}
       >
-        {match && (
+        {match && (iconPath ? (
+          <svg
+            width="15" height="15" viewBox="0 0 24 24" fill="none"
+            stroke={GENDER_COLORS[genders.get(match.id) ?? ''] ?? '#64748b'}
+            strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
+            aria-hidden="true" style={{ flexShrink: 0 }}
+          >
+            <path d={iconPath} />
+          </svg>
+        ) : (
           <i style={{
             width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
             background: GENDER_COLORS[genders.get(match.id) ?? ''] ?? '#cbd5e1',
           }} />
-        )}
+        ))}
         <span>{match ? match.name : type ? `⚠ ${type}` : ' - '}</span>
         {subtype && (
           <span style={{ color: '#0e7490', fontWeight: 600, fontSize: 10.5 }}>· {subtype}</span>
