@@ -10,12 +10,13 @@ import {
   DEFAULT_PRIMARY_VIDEO_PROMPT,
 } from '~/constants/ai-prompts';
 import { getAppSetting } from '~/services/app-settings';
-import { useNavigate, useSearchParams } from '@remix-run/react';
+import { Link, useNavigate, useSearchParams } from '@remix-run/react';
 import { extractFabric } from '~/utils/extractFabric';
 import ProductDetailsHover from '~/components/admin/ProductDetailsHover';
 import ProductHealthCell from '~/components/admin/ProductHealthCell';
 import ProductMediaTile, { type MediaBusy } from '~/components/admin/ProductMediaTile';
 import ProductFilterBar from '~/components/admin/ProductFilterBar';
+import ProductActivityDropdown from '~/components/admin/ProductActivityDropdown';
 import {
   DEFAULT_PRODUCT_FILTERS,
   matchesProductFilters,
@@ -2812,14 +2813,14 @@ export default function AdminData() {
     }
   }, [showToast, crawledProducts]);
 
-  // ── Generate everything (Media tile) ────────────────────────────────
-  // Fills whichever media steps a product is missing, in order: pick a
-  // primary photo → polish it → render the primary video. The poster is
-  // cut from the video by the trg_products_generate_primary_poster DB
-  // trigger once the clip lands (the pending poll watches for it); a
-  // product that already has a video but no poster gets it regenerated.
-  // imageOnly stops after the polish (and re-polishes a polished image).
-  const generateFullMedia = useCallback(async (productId: string, imageOnly = false) => {
+  // ── Media tile sequences ────────────────────────────────────────────
+  // 'image': pick a primary photo if there isn't one → polish it into the
+  //   primary image (re-polishes an already polished one).
+  // 'video': the image sequence first if the primary isn't polished yet →
+  //   render the primary video. The poster is cut from the clip by the
+  //   trg_products_generate_primary_poster DB trigger once it lands (the
+  //   pending poll watches for it).
+  const runMediaSequence = useCallback(async (productId: string, mode: 'image' | 'video') => {
     if (!supabase || !productId) return;
     const product = crawledProducts.find(pp => pp.id === productId);
     if (!product) return;
@@ -2847,16 +2848,12 @@ export default function AdminData() {
       }
     }
     if (!hasPrimary) return;
-    if (imageOnly || !product.primary_image_polished || !product.primary_image_url) {
+    if (mode === 'image' || !product.primary_image_polished || !product.primary_image_url) {
       const ok = await polishPrimaryImage(productId);
-      if (!ok || imageOnly) return;
+      if (!ok || mode === 'image') return;
     }
-    if (!product.primary_video_url) {
-      await generatePrimaryVideo(productId);
-    } else if (!product.primary_video_poster_url) {
-      await regeneratePoster(productId);
-    }
-  }, [crawledProducts, polishPrimaryImage, generatePrimaryVideo, regeneratePoster, showToast]);
+    await generatePrimaryVideo(productId);
+  }, [crawledProducts, polishPrimaryImage, generatePrimaryVideo, showToast]);
 
 
   // Fetch the rolling-average ETA once. Empty pool → keep the 30s
@@ -5192,7 +5189,7 @@ export default function AdminData() {
           </div>
         )}
         <div className="admin-table-wrap">
-          <table className="admin-table">
+          <table className="admin-table admin-products-list">
             <thead>
               <tr>
                 <th style={{ width: 32 }}>
@@ -5378,42 +5375,29 @@ export default function AdminData() {
                           fallbackLogo={getBrandLogo(p.brand) || null}
                           canGenerate={!!p.id && (rowImages.length > 0 || !!p.primary_image_url)}
                           onOpen={() => setOpenCreativeRow(detailOpen ? null : rowKey)}
-                          onGenerateAll={() => { if (p.id) void generateFullMedia(p.id); }}
-                          onGenerateImage={() => { if (p.id) void generateFullMedia(p.id, true); }}
+                          pageHref={p.id ? `/admin/product/${p.id}` : null}
+                          onGenerateImage={() => { if (p.id) void runMediaSequence(p.id, 'image'); }}
+                          onGenerateVideo={() => { if (p.id) void runMediaSequence(p.id, 'video'); }}
                         />
                       );
                     })()}
                   </td>
-                  <td style={{ textAlign: 'left' }} onClick={(e) => e.stopPropagation()}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 160 }}>
-                    {p.url ? (
-                      <a
-                        href={p.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title={`Open ${p.name} on ${p.brand}`}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          fontWeight: 600,
-                          fontSize: 12,
-                          color: '#0f172a',
-                          textDecoration: 'none',
-                        }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#3b82f6'; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#0f172a'; }}
-                      >
-                        {p.name}
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.55, flexShrink: 0 }}>
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                          <polyline points="15 3 21 3 21 9" />
-                          <line x1="10" y1="14" x2="21" y2="3" />
-                        </svg>
-                      </a>
-                    ) : (
-                      <div style={{ fontWeight: 600, fontSize: 12 }}>{p.name}</div>
-                    )}
+                  <td className="admin-pl-name" style={{ textAlign: 'left' }} onClick={(e) => e.stopPropagation()} title={p.name}>
+                    <div className="admin-pl-name-row">
+                      {p.id ? (
+                        <Link className="admin-pl-name-text admin-pl-name-link" to={`/admin/product/${p.id}`}>{p.name}</Link>
+                      ) : (
+                        <span className="admin-pl-name-text">{p.name}</span>
+                      )}
+                      {p.url && (
+                        <a className="admin-pl-name-out" href={p.url} target="_blank" rel="noopener noreferrer" title={`Open on ${p.brand}`} aria-label={`Open ${p.name} on ${p.brand}`}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                            <polyline points="15 3 21 3 21 9" />
+                            <line x1="10" y1="14" x2="21" y2="3" />
+                          </svg>
+                        </a>
+                      )}
                     </div>
                   </td>
                   <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
@@ -5496,10 +5480,8 @@ export default function AdminData() {
                     </div>
                   </td>
                   <td style={{ fontWeight: 600 }}>{p.price}</td>
-                  <td style={{ textAlign: 'center', fontSize: 12, whiteSpace: 'nowrap' }} title="Looks · impressions — expand the row for creators, saves and clicks">
-                    {(p.lookCount > 0 || p.impressions > 0)
-                      ? `${p.lookCount} look${p.lookCount === 1 ? '' : 's'}${p.impressions > 0 ? ` · ${p.impressions.toLocaleString()} imp` : ''}`
-                      : ' - '}
+                  <td onClick={e => e.stopPropagation()}>
+                    <ProductActivityDropdown productId={p.id} createdAt={p.created_at} lookCount={p.lookCount} impressions={p.impressions} />
                   </td>
                   <td className="admin-cell-muted" style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
                     {formatDateAdded(p.created_at)}

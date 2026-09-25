@@ -448,6 +448,7 @@ The admin panel is a Remix-based internal dashboard for managing the catalog pla
 | `admin/creators.$name.tsx` | Individual creator profile & management |
 | `admin/brands.tsx` | Brand management |
 | `admin/products.tsx` | Product catalog management |
+| `admin/product.$id.tsx` | One product, everything: media + Generate image/video, health, every stored fact, creative videos, full activity timeline (`services/product-activity.ts`). Linked from Data → Products (name, media hover card, Activity dropdown) |
 | `admin/campaigns.tsx` | Campaign management |
 | `admin/categories.tsx` | Category & tag management |
 | `admin/users.tsx` | User management |

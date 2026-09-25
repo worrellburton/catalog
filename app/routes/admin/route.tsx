@@ -5,6 +5,7 @@ import { useAuth } from '~/hooks/useAuth';
 import { isAdminRole } from '~/types/roles';
 import { supabase } from '~/utils/supabase';
 import { promoteQueuedAds } from '~/services/product-creative';
+import { loadBrandIndex, matchBrands, type BrandIndexEntry } from '~/services/admin-brand-index';
 import AdminSidebarNav from '~/components/admin/AdminSidebarNav';
 import { adminNavItems, ADMIN_SEARCH_ITEMS, findAdminNavGroup, type AdminNavItem } from '~/constants/admin-nav';
 
@@ -245,6 +246,16 @@ export default function AdminLayout() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
 
+  // Brands for the search dropdown — loaded the first time search opens.
+  const [brandIndex, setBrandIndex] = useState<BrandIndexEntry[]>([]);
+  useEffect(() => {
+    if (!searchOpen || brandIndex.length > 0) return;
+    let cancelled = false;
+    loadBrandIndex().then(idx => { if (!cancelled) setBrandIndex(idx); });
+    return () => { cancelled = true; };
+  }, [searchOpen, brandIndex.length]);
+  const brandResults = useMemo(() => matchBrands(brandIndex, searchQuery), [brandIndex, searchQuery]);
+
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const q = searchQuery.toLowerCase();
@@ -467,7 +478,7 @@ export default function AdminLayout() {
             />
             <span className="admin-search-shortcut">&#8984;K</span>
           </div>
-          {searchOpen && (searchResults.length > 0 || searchQuery.trim()) && (
+          {searchOpen && (searchResults.length > 0 || brandResults.length > 0 || searchQuery.trim()) && (
             <div className="admin-search-results">
               {searchResults.map(item => (
                 <button
@@ -477,6 +488,17 @@ export default function AdminLayout() {
                 >
                   <span className="admin-search-result-type">{item.type}</span>
                   <span>{item.label}</span>
+                </button>
+              ))}
+              {brandResults.map(b => (
+                <button
+                  key={`brand-${b.name}`}
+                  className="admin-search-result"
+                  onClick={() => { navigate(`/admin/brand/${encodeURIComponent(b.name)}`); setSearchOpen(false); setSearchQuery(''); }}
+                >
+                  <span className="admin-search-result-type">Brand</span>
+                  <span>{b.name}</span>
+                  <span className="admin-search-result-meta">{b.count} product{b.count === 1 ? '' : 's'}</span>
                 </button>
               ))}
               {/* Searching a brand (or product name) jumps to the Products
