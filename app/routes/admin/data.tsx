@@ -13,6 +13,10 @@ import { getAppSetting } from '~/services/app-settings';
 import { useNavigate, useSearchParams } from '@remix-run/react';
 import { extractFabric } from '~/utils/extractFabric';
 import ProductDetailsHover from '~/components/admin/ProductDetailsHover';
+import ProductHealthCell from '~/components/admin/ProductHealthCell';
+import MediaCompletionMeter from '~/components/admin/MediaCompletionMeter';
+import { productHealth } from '~/utils/product-health';
+import { recheckProductLinks, type LinkCheckResult } from '~/services/link-health';
 import { looks as staticLooks, creators as staticCreators } from '~/data/looks';
 import type { Look, Creator } from '~/data/looks';
 import { getLooks, getCreators, invalidateLooksCache } from '~/services/looks';
@@ -228,7 +232,7 @@ function AddProductsModal({ onClose, onIngested, showToast, onPending }: AddProd
     const { data: inserted, error } = await supabase
       .from('products')
       .insert(rows)
-      .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type');
+      .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type, url_status, url_checked_at');
     setIngesting(false);
     if (!error) {
       showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}`);
@@ -465,6 +469,9 @@ function AddProductsModal({ onClose, onIngested, showToast, onPending }: AddProd
     </div>
   );
 }
+
+/** Media-completion colours for the primary thumb border (3/3 · 1–2 · 0). */
+const MEDIA_LEVEL_COLOR = { ok: '#16a34a', warn: '#f59e0b', fail: '#ef4444' } as const;
 
 export default function AdminData() {
   // Live AI-prompt values from app_settings. Mirrored into state so the
@@ -1451,7 +1458,7 @@ export default function AdminData() {
       // Reload products in the table
       const { data: reloaded } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, seed_target_id, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
+        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, seed_target_id, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type, url_status, url_checked_at')
         .order('scraped_at', { ascending: false });
       if (reloaded) {
         setCrawledProducts((reloaded || []).map(p => ({
@@ -1885,7 +1892,7 @@ export default function AdminData() {
       if (!supabase) { setProductsLoading(false); return; }
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, seed_target_id, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
+        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, seed_target_id, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type, url_status, url_checked_at')
         .order('scraped_at', { ascending: false });
       if (error) {
         console.error('Failed to load crawled products:', error);
@@ -2014,7 +2021,7 @@ export default function AdminData() {
   }, [genJobs, loadAdProductIds]);
 
   const allProducts = useMemo(() => {
-    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; primary_image_url?: string | null; primary_image_polished?: boolean | null; primary_video_url?: string | null; primary_video_poster_url?: string | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; subtype?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null; seed_target_id?: string | null; size_fit?: string | null; materials_care?: string | null; haiku_context?: string | null }>();
+    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; primary_image_url?: string | null; primary_image_polished?: boolean | null; primary_video_url?: string | null; primary_video_poster_url?: string | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; subtype?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null; seed_target_id?: string | null; size_fit?: string | null; materials_care?: string | null; haiku_context?: string | null; url_status?: number | null; url_checked_at?: string | null }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
@@ -2061,6 +2068,9 @@ export default function AdminData() {
         entry.size_fit = cp.size_fit ?? null;
         entry.materials_care = cp.materials_care ?? null;
         entry.haiku_context = (cp as { haiku_context?: string | null }).haiku_context ?? null;
+        entry.url = cp.url || entry.url;
+        entry.url_status = cp.url_status ?? null;
+        entry.url_checked_at = cp.url_checked_at ?? null;
         if (adProductIds.has(cp.id)) {
           entry.connection = 'Ad';
         } else if (cp.is_crawled) {
@@ -2100,14 +2110,25 @@ export default function AdminData() {
           size_fit: cp.size_fit ?? null,
           materials_care: cp.materials_care ?? null,
           haiku_context: (cp as { haiku_context?: string | null }).haiku_context ?? null,
+          url_status: cp.url_status ?? null,
+          url_checked_at: cp.url_checked_at ?? null,
         });
       }
     });
 
     return Array.from(productMap.values()).map(p => {
       const hasCreative = p.video_urls.length > 0;
+      // Readiness: media (polished image + poster + video), name & brand,
+      // price and the retailer link — see utils/product-health.
+      const health = productHealth({
+        name: p.name, brand: p.brand, price: p.price, url: p.url,
+        primaryImageUrl: p.primary_image_url, primaryImagePolished: p.primary_image_polished,
+        posterUrl: p.primary_video_poster_url, videoUrl: p.primary_video_url, urlStatus: p.url_status,
+      });
       return {
         ...p,
+        health,
+        healthScore: health.score,
         hasCreative,
         lookCount: p.looks.size,
         creatorCount: p.creators.size,
@@ -2356,6 +2377,35 @@ export default function AdminData() {
   // In-flight polish-primary-image calls, keyed by product id. Drives
   // the spinner overlay on the polish-wand affordance.
   const [polishingIds, setPolishingIds] = useState<Set<string>>(new Set());
+  // Link re-checks in flight (per-row button + the Tools bulk run).
+  const [recheckingIds, setRecheckingIds] = useState<Set<string>>(new Set());
+  const applyLinkResults = useCallback((results: LinkCheckResult[]) => {
+    if (results.length === 0) return;
+    const byId = new Map(results.map(r => [r.id, r]));
+    setCrawledProducts(prev => prev.map(r => {
+      const hit = byId.get(r.id);
+      return hit ? { ...r, url_status: hit.url_status, url_checked_at: hit.url_checked_at } : r;
+    }));
+    setRecheckingIds(prev => {
+      const next = new Set(prev);
+      results.forEach(r => next.delete(r.id));
+      return next;
+    });
+  }, []);
+  const recheckLinks = useCallback(async (ids: string[]) => {
+    const list = ids.filter(Boolean);
+    if (list.length === 0) return;
+    setRecheckingIds(prev => new Set([...prev, ...list]));
+    const { results, error } = await recheckProductLinks(list, (chunk) => applyLinkResults(chunk));
+    setRecheckingIds(prev => {
+      const next = new Set(prev);
+      list.forEach(id => next.delete(id));
+      return next;
+    });
+    if (error) { showToast(`Link check failed: ${error}`); return; }
+    const broken = results.filter(r => r.url_status === -3 || (r.url_status >= 400 && r.url_status !== 403 && r.url_status !== 429)).length;
+    if (list.length > 1) showToast(`Checked ${results.length} link${results.length === 1 ? '' : 's'}${broken ? ` — ${broken} broken` : ' — none broken'}`);
+  }, [applyLinkResults, showToast]);
   // In-flight generate-primary-video calls, keyed by product id. Drives
   // the spinner overlay on the Generate CTA in the detail row.
   const [generatingPrimaryVideoIds, setGeneratingPrimaryVideoIds] = useState<Set<string>>(new Set());
@@ -3293,6 +3343,14 @@ export default function AdminData() {
                 <div role="menu" className="admin-tools-menu" onClick={() => setToolsMenuOpen(false)}>
                 <button
                   className="admin-btn admin-btn-secondary"
+                  onClick={() => { void recheckLinks(productTable.sortedData.map(r => r.id ?? '').filter(Boolean)); }}
+                  disabled={recheckingIds.size > 0}
+                  title="Run the link checker now on every product in the current view (it also runs daily at 05:00 UTC)."
+                >
+                  {recheckingIds.size > 0 ? `Checking links… ${recheckingIds.size} left` : `Re-check links (${productTable.sortedData.filter(r => r.id).length})`}
+                </button>
+                <button
+                  className="admin-btn admin-btn-secondary"
                   onClick={runPickPrimaryImages}
                   disabled={pickingPrimary}
                   title="Claude vision picks the cleanest solo-product image for every product without one (no human, no other products)."
@@ -3359,7 +3417,7 @@ export default function AdminData() {
                       // without a manual page reload.
                       const { data } = await supabase!
                         .from('products')
-                        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
+                        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type, url_status, url_checked_at')
                         .order('created_at', { ascending: false });
                       if (data) {
                         setCrawledProducts(data.map((p) => ({
@@ -3390,7 +3448,7 @@ export default function AdminData() {
                     if (result.updated > 0) {
                       const { data } = await supabase!
                         .from('products')
-                        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
+                        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type, url_status, url_checked_at')
                         .order('created_at', { ascending: false });
                       if (data) {
                         setCrawledProducts(data.map((p) => ({
@@ -5460,8 +5518,10 @@ export default function AdminData() {
                     }}
                   />
                 </th>
-                <th style={{ textAlign: 'left', minWidth: 96 }} title="Primary image (vision-picked) and primary video. Click either to expand the row.">Media</th>
+                <th style={{ textAlign: 'left', minWidth: 96 }} title="Primary image and primary video, with media completion: polished image · poster · video.">Media</th>
                 <SortableTh label="Product" sortKey="name" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <SortableTh label="Brand" sortKey="brand" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <SortableTh label="Health" sortKey="healthScore" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Type · Subtype" sortKey="type" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th style={{ textAlign: 'center' }} title="Gender, fabric, size & fit, materials, Haiku read, barcode — hover the icon">Details</th>
                 <th style={{ textAlign: 'center' }} title="Live on the feed and in search. ★ = flagged elite in /admin/creative">Live</th>
@@ -5501,7 +5561,7 @@ export default function AdminData() {
                       animation: 'pendingShimmer 1.4s ease-in-out infinite',
                     }} />
                   </td>
-                  <td colSpan={15} style={{ padding: '8px 12px' }}>
+                  <td colSpan={17} style={{ padding: '8px 12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span style={{ fontSize: 11, fontWeight: 700, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
                         Scraping
@@ -5615,7 +5675,8 @@ export default function AdminData() {
                               title="Primary image — click to expand the photo gallery and override"
                               style={{
                                 width: 44, height: 44, borderRadius: 6, padding: 0,
-                                border: '2px solid #16a34a', boxShadow: '0 0 0 1px #16a34a',
+                                border: `2px solid ${MEDIA_LEVEL_COLOR[p.health.media.level]}`,
+                                boxShadow: `0 0 0 1px ${MEDIA_LEVEL_COLOR[p.health.media.level]}`,
                                 cursor: 'pointer', background: '#fff', overflow: 'hidden',
                                 display: 'block',
                               }}
@@ -5816,6 +5877,7 @@ export default function AdminData() {
                       );
                     })()}
                     </div>
+                    {p.id && <MediaCompletionMeter media={p.health.media} />}
                   </td>
                   <td style={{ textAlign: 'left' }} onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 160 }}>
@@ -5847,27 +5909,31 @@ export default function AdminData() {
                     ) : (
                       <div style={{ fontWeight: 600, fontSize: 12 }}>{p.name}</div>
                     )}
-                      <div style={{ fontSize: 11.5, color: '#475569' }}>
-                    {p.brand ? (
+                    </div>
+                  </td>
+                  <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
+                    {p.brand && p.brand !== 'Unknown' ? (
                       <button
                         type="button"
+                        className="admin-brand-link"
                         onClick={(e) => { e.stopPropagation(); navigate(`/admin/brand/${encodeURIComponent(p.brand!)}`); }}
                         title={`Open ${p.brand} brand page`}
-                        style={{
-                          background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                          color: '#2563eb', fontSize: 12, fontWeight: 500, textAlign: 'left',
-                          textDecoration: 'none',
-                        }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.textDecoration = 'underline'; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.textDecoration = 'none'; }}
                       >
                         {p.brand}
                       </button>
                     ) : (
-                      <span style={{ color: '#94a3b8' }}>—</span>
+                      <span style={{ color: '#dc2626', fontSize: 12 }}>No brand</span>
                     )}
-                      </div>
-                    </div>
+                  </td>
+                  <td style={{ textAlign: 'left' }} onClick={(e) => e.stopPropagation()}>
+                    <ProductHealthCell
+                      health={p.health}
+                      url={p.url}
+                      urlStatus={p.url_status}
+                      urlCheckedAt={p.url_checked_at}
+                      rechecking={!!p.id && recheckingIds.has(p.id)}
+                      onRecheck={p.id ? () => { void recheckLinks([p.id!]); } : undefined}
+                    />
                   </td>
                   <td style={{ textAlign: 'left', fontSize: 12 }} onClick={e => e.stopPropagation()}>
                     {/* Consolidated Type · Subtype cell — the live connection
@@ -6092,7 +6158,7 @@ export default function AdminData() {
                 </tr>
                 {detailOpen && (
                   <tr className="admin-product-detail-row">
-                    <td colSpan={15} style={{ padding: 0, background: '#fafbff' }}>
+                    <td colSpan={17} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb' }}>
                         {/* Activity strip — the numbers that used to be five
                             optional table columns. */}
@@ -7064,7 +7130,7 @@ export default function AdminData() {
                 )}
                 {detailOpen && (
                   <tr className="admin-product-tags-row">
-                    <td colSpan={15} style={{ padding: 0, background: '#fafbff' }}>
+                    <td colSpan={17} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '12px 20px', borderTop: '1px solid #e5e7eb' }}>
                         <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
                           Tags
@@ -7089,7 +7155,7 @@ export default function AdminData() {
                 )}
                 {detailOpen && (
                   <tr className="admin-product-links-row">
-                    <td colSpan={15} style={{ padding: 0, background: '#fafbff' }}>
+                    <td colSpan={17} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
                           <div>
@@ -7245,7 +7311,7 @@ export default function AdminData() {
               })}
               {hasMore && (
                 <tr ref={sentinelRef}>
-                  <td colSpan={15} style={{ padding: '16px 12px' }}>
+                  <td colSpan={17} style={{ padding: '16px 12px' }}>
                     <div
                       role="status"
                       aria-live="polite"

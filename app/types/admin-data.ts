@@ -63,6 +63,11 @@ export interface CrawledProduct {
    *  available" in the hover panel. */
   size_fit?: string | null;
   materials_care?: string | null;
+  /** Last HTTP status the check-product-links edge fn saw for `url`, or a
+   *  sentinel: -1 not fetched (policy), -2 no response, -3 redirected to the
+   *  homepage / search (soft 404). Null = never checked. */
+  url_status?: number | null;
+  url_checked_at?: string | null;
 }
 
 export interface LookRow {
